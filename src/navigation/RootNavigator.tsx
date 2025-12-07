@@ -2,77 +2,62 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 // Auth screens
 import SplashScreen from "../screens/SplashScreen";
-import LoginScreen from "../screens/LoginScreen";
+import { LoginScreen, OTPScreen } from "../screens/auth";
 import RoleSelectScreen from "../screens/RoleSelectScreen";
 
 // Main app
 import MainTabs from "./MainTabs";
 
-// Customer Parcel Flow
-import SendParcelScreen from "../screens/SendParcelScreen";
-import PickupScreen from "../screens/parcel/PickupScreen";
-import DropoffScreen from "../screens/parcel/DropoffScreen";
-import ParcelDetailsScreen from "../screens/parcel/ParcelDetailsScreen";
-import PriceEstimateScreen from "../screens/parcel/PriceEstimateScreen";
-import ConfirmOrderScreen from "../screens/parcel/ConfirmOrderScreen";
-
-// Camera
+// Camera (fullscreen modal)
 import CameraMeasureScreen from "../screens/camera/CameraMeasureScreen";
-
-// Driver Parcel Flow
-import DriverParcelsScreen from "../screens/driver/DriverParcelsScreen";
-import DriverParcelDetailsScreen from "../screens/driver/DriverParcelDetailsScreen";
 
 // Driver Onboarding
 import {
   DriverKycScreen,
   DriverBusDetailsScreen,
   DriverTermsScreen,
-} from "../screens/onboarding/driver";
+} from "../screens/driver";
 
-/**
- * Parcel data structure for driver flow
- */
-export interface ParcelData {
-  id: string;
-  route: string;
-  size: string;
-  weight: string;
-  pickup: string;
-  drop: string;
-}
+// Profile
+import { ProfileSetupScreen, EditProfileScreen } from "../screens/profile";
+
+// Re-export ParcelData for backward compatibility
+export { ParcelData } from "./HomeStack";
 
 /**
  * Root Stack navigation param list with strict typing
+ *
+ * Navigation Structure:
+ * ├── Auth Flow (Splash → Login → OTP → RoleSelect)
+ * ├── Profile Setup (ProfileSetup)
+ * ├── Driver Onboarding (DriverKyc → DriverBusDetails → DriverTerms)
+ * ├── Main (Tab Navigator)
+ * │   ├── Home (HomeStack)
+ * │   ├── Packages (PackagesStack)
+ * │   ├── Notifications
+ * │   └── More (MoreStack)
+ * └── CameraMeasure (Modal)
  */
 export type RootStackParamList = {
   // Auth Flow
   Splash: undefined;
   Login: undefined;
+  OTP: { phone: string };
   RoleSelect: undefined;
+
+  // Profile Setup
+  ProfileSetup: undefined;
 
   // Driver Onboarding
   DriverKyc: undefined;
   DriverBusDetails: undefined;
   DriverTerms: undefined;
 
-  // Main App
+  // Main App (contains 4 tabs: Home, Packages, Notifications, More)
   Main: undefined;
 
-  // Customer Parcel Flow
-  SendParcel: undefined;
-  Pickup: undefined;
-  Dropoff: undefined;
-  ParcelDetails: { capturedImage?: string } | undefined;
-  PriceEstimate: undefined;
-  ConfirmOrder: undefined;
-
-  // Camera
+  // Camera (fullscreen modal - no tab bar)
   CameraMeasure: undefined;
-
-  // Driver Flow
-  DriverParcels: undefined;
-  DriverParcelDetails: { parcel: ParcelData };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -86,7 +71,11 @@ export default function RootNavigator() {
       {/* Auth Flow */}
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="OTP" component={OTPScreen} />
       <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
+
+      {/* Profile Setup */}
+      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
 
       {/* Driver Onboarding */}
       <Stack.Screen name="DriverKyc" component={DriverKycScreen} />
@@ -96,23 +85,8 @@ export default function RootNavigator() {
       {/* Main App */}
       <Stack.Screen name="Main" component={MainTabs} />
 
-      {/* Customer Parcel Flow */}
-      <Stack.Screen name="SendParcel" component={SendParcelScreen} />
-      <Stack.Screen name="Pickup" component={PickupScreen} />
-      <Stack.Screen name="Dropoff" component={DropoffScreen} />
-      <Stack.Screen name="ParcelDetails" component={ParcelDetailsScreen} />
-      <Stack.Screen name="PriceEstimate" component={PriceEstimateScreen} />
-      <Stack.Screen name="ConfirmOrder" component={ConfirmOrderScreen} />
-
-      {/* Camera */}
+      {/* Camera (fullscreen modal - no tab bar) */}
       <Stack.Screen name="CameraMeasure" component={CameraMeasureScreen} />
-
-      {/* Driver Flow */}
-      <Stack.Screen name="DriverParcels" component={DriverParcelsScreen} />
-      <Stack.Screen
-        name="DriverParcelDetails"
-        component={DriverParcelDetailsScreen}
-      />
     </Stack.Navigator>
   );
 }

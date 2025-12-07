@@ -11,9 +11,9 @@ import { spacing, radius, typography } from "../constants";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../navigation/RootNavigator";
+import { HomeStackParamList } from "../navigation/HomeStack";
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type NavigationProp = NativeStackNavigationProp<HomeStackParamList>;
 
 interface MenuOption {
   id: string;

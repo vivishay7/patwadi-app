@@ -3,7 +3,7 @@
  * Clean abstraction over Supabase auth operations
  */
 
-import { supabase, isSupabaseConfigured, getSupabaseConfigError } from "../supabase";
+import { supabase, isSupabaseConfigured, getSupabaseConfigError } from "../supabaseClient";
 import { Profile, ProfileInsert, ProfileUpdate, UserRole, AppUser } from "../db/types";
 
 /**
@@ -242,4 +242,3 @@ export async function getCurrentSession(): Promise<ApiResponse<AppUser | null>> 
     return { data: null, error: message };
   }
 }
-

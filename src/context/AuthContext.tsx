@@ -1,61 +1,78 @@
+/**
+ * AuthContext
+ * Manages authentication state and provides auth methods
+ */
+
 import React, {
   createContext,
   useContext,
   useState,
   useEffect,
-  ReactNode,
   useCallback,
+  ReactNode,
 } from "react";
-import { supabase, validateSupabase } from "../lib/supabase";
-import { fetchProfile, signOut as apiSignOut } from "../lib/api/auth";
-import { AppUser, UserRole } from "../lib/db/types";
+import { Session, User } from "@supabase/supabase-js";
+import { 
+  supabase, 
+  isSupabaseConfigured, 
+  getSupabaseConfigError,
+  validateSupabaseConfig,
+} from "../lib/supabaseClient";
 
-/**
- * Auth Context State
- */
+// ============================================
+// TYPES
+// ============================================
+
 interface AuthContextType {
-  /** Current authenticated user (null if guest) */
-  user: AppUser | null;
-  /** Loading state during initialization */
+  // State
+  user: User | null;
+  session: Session | null;
   loading: boolean;
-  /** Whether Supabase is properly configured */
   isConfigured: boolean;
-  /** Configuration error message */
   configError: string | null;
-  /** Whether user is authenticated */
+  
+  // Computed
   isAuthenticated: boolean;
-  /** Whether user is a guest (not logged in) */
   isGuest: boolean;
-  /** Sign out the current user */
+  
+  // Methods
+  signInWithOtp: (phone: string) => Promise<{ success: boolean; error: string | null }>;
+  verifyOtp: (phone: string, token: string) => Promise<{ success: boolean; error: string | null; isNewUser: boolean }>;
   signOut: () => Promise<void>;
-  /** Refresh user data from profile */
-  refreshUser: () => Promise<void>;
-  /** Set user after successful auth */
-  setUser: (user: AppUser | null) => void;
+  refreshSession: () => Promise<void>;
 }
 
+// ============================================
+// CONTEXT
+// ============================================
+
 const AuthContext = createContext<AuthContextType | null>(null);
+
+// ============================================
+// PROVIDER
+// ============================================
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<AppUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isConfigured, setIsConfigured] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
 
-  // Validate Supabase config on mount
+  // Initialize and validate config
   useEffect(() => {
-    const validation = validateSupabase();
+    const validation = validateSupabaseConfig();
     setIsConfigured(validation.valid);
     setConfigError(validation.error);
   }, []);
 
   // Listen for auth state changes
   useEffect(() => {
-    if (!isConfigured) {
+    if (!isSupabaseConfigured()) {
       setLoading(false);
       return;
     }
@@ -63,23 +80,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Get initial session
     const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          const profileResult = await fetchProfile(session.user.id);
-
-          setUser({
-            id: session.user.id,
-            phone: session.user.phone || null,
-            role: profileResult.data?.role || null,
-            isNewUser: !profileResult.data,
-          });
-        } else {
-          setUser(null);
-        }
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        
+        setSession(initialSession);
+        setUser(initialSession?.user || null);
       } catch (error) {
         console.error("Auth initialization error:", error);
-        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -89,19 +95,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Subscribe to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event);
-
-        if (event === "SIGNED_IN" && session?.user) {
-          const profileResult = await fetchProfile(session.user.id);
-
-          setUser({
-            id: session.user.id,
-            phone: session.user.phone || null,
-            role: profileResult.data?.role || null,
-            isNewUser: !profileResult.data,
-          });
-        } else if (event === "SIGNED_OUT") {
+      async (event, currentSession) => {
+        console.log("🔐 Auth state changed:", event);
+        
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
+        
+        if (event === "SIGNED_OUT") {
+          setSession(null);
           setUser(null);
         }
       }
@@ -112,60 +113,116 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [isConfigured]);
 
-  // Sign out handler
-  const handleSignOut = useCallback(async () => {
-    setLoading(true);
+  // Sign in with OTP
+  const signInWithOtp = useCallback(async (phone: string): Promise<{ success: boolean; error: string | null }> => {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: getSupabaseConfigError() };
+    }
+
     try {
-      await apiSignOut();
-      setUser(null);
-    } catch (error) {
-      console.error("Sign out error:", error);
-    } finally {
-      setLoading(false);
+      const { error } = await supabase.auth.signInWithOtp({ phone });
+
+      if (error) {
+        console.error("OTP send error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, error: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to send OTP";
+      return { success: false, error: message };
     }
   }, []);
 
-  // Refresh user data
-  const refreshUser = useCallback(async () => {
-    if (!user?.id) return;
+  // Verify OTP
+  const verifyOtp = useCallback(async (
+    phone: string, 
+    token: string
+  ): Promise<{ success: boolean; error: string | null; isNewUser: boolean }> => {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: getSupabaseConfigError(), isNewUser: false };
+    }
 
     try {
-      const profileResult = await fetchProfile(user.id);
-      
-      if (profileResult.data) {
-        setUser((prev) =>
-          prev
-            ? {
-                ...prev,
-                role: profileResult.data!.role,
-                isNewUser: false,
-              }
-            : null
-        );
-      }
-    } catch (error) {
-      console.error("Refresh user error:", error);
-    }
-  }, [user?.id]);
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone,
+        token,
+        type: "sms",
+      });
 
+      if (error) {
+        console.error("OTP verify error:", error.message);
+        return { success: false, error: error.message, isNewUser: false };
+      }
+
+      if (!data.user) {
+        return { success: false, error: "No user returned", isNewUser: false };
+      }
+
+      // Check if user has a profile
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", data.user.id)
+        .single();
+
+      const isNewUser = !profile || !!profileError;
+
+      return { success: true, error: null, isNewUser };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to verify OTP";
+      return { success: false, error: message, isNewUser: false };
+    }
+  }, []);
+
+  // Sign out
+  const handleSignOut = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+    } catch (error) {
+      console.error("Sign out error:", error);
+    }
+  }, []);
+
+  // Refresh session
+  const refreshSession = useCallback(async () => {
+    try {
+      const { data: { session: newSession } } = await supabase.auth.refreshSession();
+      setSession(newSession);
+      setUser(newSession?.user || null);
+    } catch (error) {
+      console.error("Session refresh error:", error);
+    }
+  }, []);
+
+  // Context value
   const value: AuthContextType = {
     user,
+    session,
     loading,
     isConfigured,
     configError,
-    isAuthenticated: !!user && !user.isNewUser,
+    isAuthenticated: !!user,
     isGuest: !user,
+    signInWithOtp,
+    verifyOtp,
     signOut: handleSignOut,
-    refreshUser,
-    setUser,
+    refreshSession,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
-/**
- * Hook to access auth context
- */
+// ============================================
+// HOOK
+// ============================================
+
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (!context) {
@@ -175,4 +232,3 @@ export function useAuth(): AuthContextType {
 }
 
 export default AuthContext;
-

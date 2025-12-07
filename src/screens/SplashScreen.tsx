@@ -1,12 +1,75 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useEffect, useState, Component, ReactNode } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/RootNavigator";
+import { useAuth } from "../context/AuthContext";
+import { useProfile } from "../context/ProfileContext";
 import colors from "../theme/colors";
 import { spacing, radius, typography } from "../constants";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Splash">;
 
-export default function SplashScreen({ navigation }: Props) {
+function SplashContent({ navigation }: Props) {
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { profile, loading: profileLoading, role, needsKyc } = useProfile();
+  const [checking, setChecking] = useState(true);
+
+  // Debug log to see what's happening
+  useEffect(() => {
+    console.log("🚀 SplashScreen state:", {
+      authLoading,
+      profileLoading,
+      isAuthenticated,
+      checking,
+      profile: profile?.id,
+      role,
+    });
+  }, [authLoading, profileLoading, isAuthenticated, checking, profile, role]);
+
+  // Auto-redirect if already authenticated
+  useEffect(() => {
+    if (authLoading || profileLoading) return;
+
+    // Only auto-redirect after a short delay to show splash
+    const timer = setTimeout(() => {
+      setChecking(false);
+
+      if (isAuthenticated) {
+        if (!profile || !role) {
+          // User is authenticated but has no profile yet
+          navigation.replace("RoleSelect");
+        } else if (role === "driver" && needsKyc) {
+          // Driver needs to complete KYC
+          navigation.replace("DriverKyc");
+        } else {
+          // User is fully set up, go to main app
+          navigation.replace("Main");
+        }
+      }
+    }, 1000); // 1 second splash delay
+
+    return () => clearTimeout(timer);
+  }, [authLoading, profileLoading, isAuthenticated, profile, role, needsKyc, navigation]);
+
+  // Always show the splash screen - loading indicator if still loading
+  const isLoading = checking && (authLoading || profileLoading);
+  
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logoBadge}>
+            <Text style={styles.logoInitial}>P</Text>
+          </View>
+          <Text style={styles.brand}>Patwadi</Text>
+          <Text style={styles.subTitle}>Overnight Intercity Parcels</Text>
+        </View>
+        <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+      </View>
+    );
+  }
+
+  // Show splash screen with actions if not authenticated
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
@@ -47,6 +110,48 @@ export default function SplashScreen({ navigation }: Props) {
         </Text>
       </View>
     </View>
+  );
+}
+
+// Error boundary wrapper
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("SplashScreen Error:", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorMessage}>{this.state.error?.message}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Main export with error boundary
+export default function SplashScreen(props: Props) {
+  return (
+    <ErrorBoundary>
+      <SplashContent {...props} />
+    </ErrorBoundary>
   );
 }
 
@@ -91,6 +196,9 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textPrimary,
   },
+  loader: {
+    marginBottom: spacing.massive,
+  },
   actions: {
     gap: spacing.md + 2,
   },
@@ -126,5 +234,24 @@ const styles = StyleSheet.create({
     textAlign: "center",
     ...typography.caption,
     color: colors.textSecondary,
+  },
+  // Error styles
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background,
+    padding: spacing.xl,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: colors.error,
+    marginBottom: spacing.md,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: "center",
   },
 });

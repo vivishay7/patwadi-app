@@ -1,31 +1,33 @@
+/**
+ * SectionHeader Component
+ * Reusable section header with optional "See all" button
+ */
+
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import colors from "../theme/colors";
 import { spacing, typography } from "../constants";
 
 interface SectionHeaderProps {
+  /** Section title */
   title: string;
-  subtitle?: string;
-  actionLabel?: string;
-  onAction?: () => void;
+  /** Optional "See all" callback */
+  onPress?: () => void;
+  /** Custom "See all" text */
+  actionText?: string;
 }
 
-export function SectionHeader({
-  title,
-  subtitle,
-  actionLabel,
-  onAction,
+export function SectionHeader({ 
+  title, 
+  onPress, 
+  actionText = "See all" 
 }: SectionHeaderProps) {
   return (
     <View style={styles.container}>
-      <View style={styles.textContainer}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-      </View>
-
-      {actionLabel && onAction && (
-        <TouchableOpacity onPress={onAction} activeOpacity={0.7}>
-          <Text style={styles.action}>{actionLabel}</Text>
+      <Text style={styles.title}>{title}</Text>
+      {onPress && (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+          <Text style={styles.action}>{actionText}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -36,26 +38,19 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     marginBottom: spacing.lg,
   },
-  textContainer: {
-    flex: 1,
-  },
   title: {
-    ...typography.h2,
+    ...typography.bodyLarge,
+    fontWeight: "700",
     color: colors.textPrimary,
   },
-  subtitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
   action: {
-    ...typography.buttonSmall,
+    ...typography.bodySmall,
     color: colors.primary,
+    fontWeight: "600",
   },
 });
 
 export default SectionHeader;
-

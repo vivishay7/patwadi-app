@@ -1,16 +1,20 @@
 // src/screens/HomeScreen.tsx
-import CustomerHome from "./home/CustomerHome";
-import DriverHome from "./home/DriverHome";
+import { CustomerHomeScreen, DriverHomeScreen } from "./home";
 import { useRole } from "../context/RoleContext";
 
+/**
+ * HomeScreen
+ * Role-aware wrapper that renders the appropriate home screen
+ * based on the current user's role (customer or driver)
+ */
 export default function HomeScreen() {
   const { role } = useRole();
 
   // DRIVER VIEW
   if (role === "driver") {
-    return <DriverHome />;
+    return <DriverHomeScreen />;
   }
 
   // CUSTOMER VIEW
-  return <CustomerHome />;
+  return <CustomerHomeScreen />;
 }

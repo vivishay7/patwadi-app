@@ -3,8 +3,8 @@
  * Handles driver-specific operations
  */
 
-import { supabase, isSupabaseConfigured, getSupabaseConfigError } from "../supabase";
-import { DriverKyc, DriverBusDetails } from "../db/types";
+import { supabase, isSupabaseConfigured, getSupabaseConfigError } from "../supabaseClient";
+import { DriverKyc, DriverBusDetails, DriverKycInsert, DriverBusDetailsInsert } from "../db/types";
 
 /**
  * API Response type
@@ -35,62 +35,128 @@ export interface BusDetailsInput {
 
 /**
  * Save driver KYC information
- * Currently a placeholder - returns mock success
  */
 export async function saveDriverKyc(
   userId: string,
   kycData: KycInput
 ): Promise<ApiResponse<DriverKyc>> {
-  // TODO: Implement actual Supabase storage
-  // For now, return mock success
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: getSupabaseConfigError() };
+  }
 
-  console.log("📋 Saving KYC data for user:", userId, kycData);
+  try {
+    // Check if KYC already exists
+    const { data: existing } = await supabase
+      .from("driver_kyc")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
+    const kycPayload: DriverKycInsert = {
+      user_id: userId,
+      aadhaar_number: kycData.aadhaarNumber,
+      license_number: kycData.licenseNumber,
+      photo_url: kycData.photoUri || null,
+      status: "pending",
+    };
 
-  // Mock response
-  const mockKyc: DriverKyc = {
-    id: `kyc_${Date.now()}`,
-    user_id: userId,
-    aadhaar_number: kycData.aadhaarNumber,
-    license_number: kycData.licenseNumber,
-    photo_url: kycData.photoUri,
-    status: "pending",
-    created_at: new Date().toISOString(),
-  };
+    let result;
 
-  return { data: mockKyc, error: null };
+    if (existing) {
+      // Update existing
+      result = await supabase
+        .from("driver_kyc")
+        .update({
+          aadhaar_number: kycData.aadhaarNumber,
+          license_number: kycData.licenseNumber,
+          photo_url: kycData.photoUri || null,
+          status: "pending",
+        })
+        .eq("user_id", userId)
+        .select()
+        .single();
+    } else {
+      // Insert new
+      result = await supabase
+        .from("driver_kyc")
+        .insert(kycPayload)
+        .select()
+        .single();
+    }
+
+    if (result.error) {
+      console.error("Save KYC error:", result.error.message);
+      return { data: null, error: result.error.message };
+    }
+
+    return { data: result.data as DriverKyc, error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return { data: null, error: message };
+  }
 }
 
 /**
  * Save driver bus details
- * Currently a placeholder - returns mock success
  */
 export async function saveDriverBusData(
   userId: string,
   busData: BusDetailsInput
 ): Promise<ApiResponse<DriverBusDetails>> {
-  // TODO: Implement actual Supabase storage
-  // For now, return mock success
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: getSupabaseConfigError() };
+  }
 
-  console.log("🚌 Saving bus data for user:", userId, busData);
+  try {
+    // Check if bus details already exist
+    const { data: existing } = await supabase
+      .from("driver_bus_details")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
+    const busPayload: DriverBusDetailsInsert = {
+      user_id: userId,
+      operator_name: busData.operatorName,
+      routes: busData.routes,
+      vehicle_number: busData.vehicleNumber,
+      capacity_kg: busData.capacity,
+    };
 
-  // Mock response
-  const mockBusDetails: DriverBusDetails = {
-    id: `bus_${Date.now()}`,
-    user_id: userId,
-    operator_name: busData.operatorName,
-    routes: busData.routes,
-    vehicle_number: busData.vehicleNumber,
-    capacity: busData.capacity,
-    created_at: new Date().toISOString(),
-  };
+    let result;
 
-  return { data: mockBusDetails, error: null };
+    if (existing) {
+      // Update existing
+      result = await supabase
+        .from("driver_bus_details")
+        .update({
+          operator_name: busData.operatorName,
+          routes: busData.routes,
+          vehicle_number: busData.vehicleNumber,
+          capacity_kg: busData.capacity,
+        })
+        .eq("user_id", userId)
+        .select()
+        .single();
+    } else {
+      // Insert new
+      result = await supabase
+        .from("driver_bus_details")
+        .insert(busPayload)
+        .select()
+        .single();
+    }
+
+    if (result.error) {
+      console.error("Save bus details error:", result.error.message);
+      return { data: null, error: result.error.message };
+    }
+
+    return { data: result.data as DriverBusDetails, error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return { data: null, error: message };
+  }
 }
 
 /**
@@ -154,4 +220,3 @@ export async function fetchDriverBusDetails(
     return { data: null, error: message };
   }
 }
-

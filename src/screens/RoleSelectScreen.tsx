@@ -1,18 +1,17 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../theme/colors";
 import { spacing, radius, typography } from "../constants";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/RootNavigator";
 import { useAuth } from "../context/AuthContext";
-import { createProfile } from "../lib/api/auth";
+import { useProfile } from "../context/ProfileContext";
 import { UserRole } from "../lib/db/types";
 import { useState } from "react";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "RoleSelect">;
-type RouteProps = RouteProp<RootStackParamList, "RoleSelect">;
 
 interface RoleOption {
   role: UserRole;
@@ -38,44 +37,44 @@ const roles: RoleOption[] = [
 
 export default function RoleSelectScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const route = useRoute<RouteProps>();
-  const { user, setUser, refreshUser } = useAuth();
+  const { user } = useAuth();
+  const { createProfile, profile } = useProfile();
 
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
 
   const handleSelectRole = async (role: UserRole) => {
-    if (!user) return;
+    if (!user) {
+      Alert.alert("Error", "User not found. Please try logging in again.");
+      return;
+    }
 
     setLoading(true);
     setSelectedRole(role);
 
     try {
-      // Create profile in database
-      const result = await createProfile(user.id, user.phone || "", role);
+      // Create profile with selected role
+      const result = await createProfile(user.phone || null, role);
 
       if (result.error) {
         console.error("Error creating profile:", result.error);
+        Alert.alert("Error", result.error);
         setLoading(false);
         setSelectedRole(null);
         return;
       }
 
-      // Update local user state
-      setUser({
-        ...user,
-        role,
-        isNewUser: false,
-      });
-
       // Navigate based on role
       if (role === "driver") {
+        // Drivers need to complete KYC
         navigation.replace("DriverKyc");
       } else {
+        // Customers go straight to main app
         navigation.replace("Main");
       }
     } catch (error) {
       console.error("Role selection error:", error);
+      Alert.alert("Error", "Something went wrong. Please try again.");
       setLoading(false);
       setSelectedRole(null);
     }
@@ -228,4 +227,3 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxxl,
   },
 });
-
