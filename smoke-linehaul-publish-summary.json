@@ -1,0 +1,17 @@
+{
+  "at": "2026-06-15T03:20:41.944Z",
+  "device": "AIGQDASODIUSL7AQ",
+  "login": true,
+  "publishScreen": true,
+  "galleryPhoto": false,
+  "publishUi": false,
+  "apiTripOpen": true,
+  "apiUploadOk": true,
+  "deleteDraft": false,
+  "errors": [
+    "Gallery button not found — reload app in Metro (press r)",
+    "Delete draft UI test inconclusive — cleaned via API"
+  ],
+  "apiDraftId": "d9c8691a-c059-44fb-9644-480101b9ab74",
+  "tripId": "d9c8691a-c059-44fb-9644-480101b9ab74"
+}

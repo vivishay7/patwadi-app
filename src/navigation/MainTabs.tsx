@@ -1,84 +1,170 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, StyleSheet } from "react-native";
-import HomeStack from "./HomeStack";
-import PackagesStack from "./PackagesStack";
-import MoreStack from "./MoreStack";
+import HomeScreen from "../screens/HomeScreen";
+import MyPackagesScreen from "../screens/packages/MyPackagesScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
+import SettingsScreen from "../screens/SettingsScreen";
+import MyTripsScreen from "../screens/driver/MyTripsScreen";
+import DriverParcelsScreen from "../screens/driver/DriverParcelsScreen";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../theme/colors";
-import { spacing } from "../constants";
+import { spacing, radius } from "../constants";
 import { useRole } from "../context/RoleContext";
+import { OperatorAlertsProvider, useOperatorAlerts } from "../context/OperatorAlertsContext";
 
-export type BottomTabParamList = {
+export type CustomerTabParamList = {
   Home: undefined;
-  Packages: undefined;
+  Packages: { openTrack?: boolean } | undefined;
   Notifications: undefined;
-  More: undefined;
+  Settings: undefined;
 };
 
-const Tab = createBottomTabNavigator<BottomTabParamList>();
+export type OperatorTabParamList = {
+  Home: undefined;
+  Trips: undefined;
+  Parcels: { showAvailable?: boolean } | undefined;
+  Settings: undefined;
+};
 
-/**
- * Main Tab Navigator
- *
- * 4 tabs: Home | Packages | Notifications | More
- *
- * Role-based behavior:
- * - Customer: Home shows discovery, Packages shows "My Packages"
- * - Driver: Home shows dashboard, Packages shows "Assigned Orders"
- */
-export default function MainTabs() {
-  const { role } = useRole();
-  const isDriver = role === "driver";
+const CustomerTab = createBottomTabNavigator<CustomerTabParamList>();
+const OperatorTab = createBottomTabNavigator<OperatorTabParamList>();
+
+type BadgeColor = "red" | "green";
+
+function TabIcon({
+  routeName,
+  focused,
+  badges = [],
+}: {
+  routeName: string;
+  focused: boolean;
+  badges?: BadgeColor[];
+}) {
+  let iconName: keyof typeof Ionicons.glyphMap = "home-outline";
+
+  if (routeName === "Home") iconName = "home-outline";
+  if (routeName === "Packages" || routeName === "Parcels") iconName = "cube-outline";
+  if (routeName === "Trips") iconName = "bus-outline";
+  if (routeName === "Notifications") iconName = "notifications-outline";
+  if (routeName === "Settings") iconName = "menu-outline";
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarIcon: ({ focused, color }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = "home-outline";
+    <View style={styles.tabItem}>
+      <View style={styles.iconWrap}>
+        <Ionicons name={iconName} size={26} color={colors.black} style={styles.tabIcon} />
+        {badges.includes("red") ? <View style={[styles.badgeDot, styles.badgeRed]} /> : null}
+        {badges.includes("green") ? (
+          <View
+            style={[
+              styles.badgeDot,
+              styles.badgeGreen,
+              badges.includes("red") && styles.badgeGreenOffset,
+            ]}
+          />
+        ) : null}
+      </View>
+      {focused && <View style={styles.activeIndicator} />}
+    </View>
+  );
+}
 
-          if (route.name === "Home") {
-            iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "Packages") {
-            iconName = focused ? "cube" : "cube-outline";
-          } else if (route.name === "Notifications") {
-            iconName = focused ? "notifications" : "notifications-outline";
-          } else if (route.name === "More") {
-            iconName = focused ? "menu" : "menu-outline";
-          }
+const tabScreenOptions = (routeName: string) => ({
+  headerShown: false,
+  tabBarShowLabel: false,
+  tabBarStyle: styles.tabBar,
+  tabBarIcon: ({ focused }: { focused: boolean }) => (
+    <TabIcon routeName={routeName} focused={focused} />
+  ),
+});
 
-          return (
-            <View style={styles.tabItem}>
-              <Ionicons name={iconName} size={26} color={color} />
-              {focused && <View style={styles.activeIndicator} />}
-            </View>
-          );
-        },
-      })}
-    >
-      <Tab.Screen
+function OperatorTabsInner() {
+  const { role } = useRole();
+  const isLinehaul = role === "linehaul";
+  const { availableJobsCount, pendingTransfers, parcelsActionRequired } = useOperatorAlerts();
+
+  const parcelsBadges: BadgeColor[] = [];
+  if (role === "linehaul" && parcelsActionRequired) parcelsBadges.push("red");
+  if (availableJobsCount > 0) parcelsBadges.push("green");
+
+  const tripsBadges: BadgeColor[] =
+    role === "linehaul" && pendingTransfers.length > 0 ? ["green"] : [];
+
+  const homeBadges: BadgeColor[] = [];
+  if (availableJobsCount > 0 || pendingTransfers.length > 0) homeBadges.push("green");
+
+  return (
+    <OperatorTab.Navigator>
+      <OperatorTab.Screen
         name="Home"
-        component={HomeStack}
+        component={HomeScreen}
         options={{
-          tabBarLabel: isDriver ? "Dashboard" : "Home",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon routeName="Home" focused={focused} badges={homeBadges} />
+          ),
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarStyle: styles.tabBar,
         }}
       />
-      <Tab.Screen
-        name="Packages"
-        component={PackagesStack}
+      {isLinehaul ? (
+        <OperatorTab.Screen
+          name="Trips"
+          component={MyTripsScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon routeName="Trips" focused={focused} badges={tripsBadges} />
+            ),
+            headerShown: false,
+            tabBarShowLabel: false,
+            tabBarStyle: styles.tabBar,
+          }}
+        />
+      ) : null}
+      <OperatorTab.Screen
+        name="Parcels"
+        component={DriverParcelsScreen}
         options={{
-          tabBarLabel: isDriver ? "Orders" : "Packages",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon routeName="Parcels" focused={focused} badges={parcelsBadges} />
+          ),
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarStyle: styles.tabBar,
         }}
       />
-      <Tab.Screen name="Notifications" component={NotificationsScreen} />
-      <Tab.Screen name="More" component={MoreStack} />
-    </Tab.Navigator>
+      <OperatorTab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarIcon: ({ focused }) => <TabIcon routeName="Settings" focused={focused} />,
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarStyle: styles.tabBar,
+        }}
+      />
+    </OperatorTab.Navigator>
+  );
+}
+
+export default function MainTabs() {
+  const { role } = useRole();
+  const isOperator = role === "linehaul" || role === "lmp";
+
+  if (isOperator) {
+    return (
+      <OperatorAlertsProvider>
+        <OperatorTabsInner />
+      </OperatorAlertsProvider>
+    );
+  }
+
+  return (
+    <CustomerTab.Navigator screenOptions={({ route }) => tabScreenOptions(route.name)}>
+      <CustomerTab.Screen name="Home" component={HomeScreen} />
+      <CustomerTab.Screen name="Packages" component={MyPackagesScreen} />
+      <CustomerTab.Screen name="Notifications" component={NotificationsScreen} />
+      <CustomerTab.Screen name="Settings" component={SettingsScreen} />
+    </CustomerTab.Navigator>
   );
 }
 
@@ -87,30 +173,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
-    height: 70,
+    height: 60,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    elevation: 8,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    paddingBottom: spacing.sm,
   },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: "500",
-    marginTop: spacing.xs,
-  },
-  tabItem: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activeIndicator: {
+  tabItem: { alignItems: "center", justifyContent: "center" },
+  iconWrap: { position: "relative" },
+  tabIcon: { marginBottom: spacing.xs },
+  badgeDot: {
     position: "absolute",
-    top: -spacing.sm,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    top: -2,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.white,
+  },
+  badgeRed: { backgroundColor: colors.error },
+  badgeGreen: { backgroundColor: colors.success },
+  badgeGreenOffset: { right: 6, top: 4 },
+  activeIndicator: {
+    width: 22,
+    height: 3,
+    borderRadius: radius.xs,
     backgroundColor: colors.primary,
   },
 });

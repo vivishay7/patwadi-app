@@ -1,7 +1,6 @@
 import * as FileSystem from "expo-file-system";
-import { supabase } from "./supabase";
 
-// Get the Supabase URL from the client
+// Dimension AI endpoint (hardcoded - does not require Supabase client)
 const DIMENSION_AI_ENDPOINT =
   "https://xkaxwxdjzklpxnnhkkwo.supabase.co/functions/v1/dim-ai";
 
@@ -22,8 +21,10 @@ export async function estimateDimensionsFromImage(
 ): Promise<DimensionEstimate | null> {
   try {
     // Read image as base64
+    // Check if EncodingType exists, otherwise use string literal
+    const encoding = FileSystem.EncodingType?.Base64 || "base64";
     const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: encoding as FileSystem.EncodingType,
     });
 
     const response = await fetch(DIMENSION_AI_ENDPOINT, {

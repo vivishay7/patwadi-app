@@ -3,7 +3,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import colors from "../theme/colors";
@@ -11,62 +11,108 @@ import { spacing, radius, typography } from "../constants";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { HomeStackParamList } from "../navigation/HomeStack";
+import { RootStackParamList } from "../navigation/RootNavigator";
 
-type NavigationProp = NativeStackNavigationProp<HomeStackParamList>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface MenuOption {
   id: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  subtitle?: string;
+  onPress: () => void;
 }
-
-const options: MenuOption[] = [
-  { id: "1", label: "Track Delivery", icon: "navigate-outline" },
-  { id: "2", label: "Schedule Pickup", icon: "calendar-outline" },
-  { id: "3", label: "Important Updates", icon: "information-circle-outline" },
-  { id: "4", label: "Weight Balance", icon: "barbell-outline" },
-  { id: "5", label: "Bus Depots", icon: "bus-outline" },
-  { id: "6", label: "Intercity Transport", icon: "swap-horizontal-outline" },
-];
 
 export default function SendParcelScreen() {
   const navigation = useNavigation<NavigationProp>();
 
-  const handlePress = (label: string) => {
-    if (label === "Schedule Pickup" || label === "Intercity Transport") {
-      navigation.navigate("Pickup");
-      return;
-    }
-    // Other menu items can be wired later
-  };
+  const primaryActions: MenuOption[] = [
+    {
+      id: "send-parcel",
+      label: "Send a Parcel",
+      icon: "cube-outline",
+      subtitle: "Starts at ₹40/kg",
+      onPress: () => navigation.navigate("PackageInfo"),
+    },
+    {
+      id: "my-parcels",
+      label: "My Parcels",
+      icon: "list-outline",
+      onPress: () => navigation.navigate("Main", { screen: "Packages" }),
+    },
+  ];
 
-  const renderItem = ({ item }: { item: MenuOption }) => (
+  const secondaryActions: MenuOption[] = [
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: "notifications-outline",
+      onPress: () => navigation.navigate("Main", { screen: "Notifications" }),
+    },
+  ];
+
+  const renderPrimaryCard = (item: MenuOption) => (
     <TouchableOpacity
-      style={styles.card}
-      onPress={() => handlePress(item.label)}
+      style={styles.primaryCard}
+      onPress={item.onPress}
       activeOpacity={0.8}
     >
-      <Ionicons name={item.icon} size={26} color={colors.black} />
-      <Text style={styles.label}>{item.label}</Text>
+      <View style={styles.primaryCardContent}>
+        <View style={styles.primaryIconContainer}>
+          <Ionicons name={item.icon} size={32} color={colors.primary} />
+        </View>
+        <View style={styles.primaryTextContainer}>
+          <Text style={styles.primaryLabel}>{item.label}</Text>
+          {item.subtitle && (
+            <Text style={styles.primarySubtitle}>{item.subtitle}</Text>
+          )}
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+    </TouchableOpacity>
+  );
+
+  const renderSecondaryCard = (item: MenuOption) => (
+    <TouchableOpacity
+      style={styles.secondaryCard}
+      onPress={item.onPress}
+      activeOpacity={0.8}
+    >
+      <Ionicons name={item.icon} size={24} color={colors.textPrimary} />
+      <Text style={styles.secondaryLabel}>{item.label}</Text>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <View style={styles.container}>
-        <Text style={styles.heading}>Send Parcel</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          <Text style={styles.heading}>Send Parcel</Text>
 
-        <FlatList
-          data={options}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
+          <View style={styles.section}>
+            {primaryActions.map((item) => (
+              <View key={item.id} style={styles.primaryCardWrapper}>
+                {renderPrimaryCard(item)}
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.secondaryGrid}>
+              {secondaryActions.map((item) => (
+                <View key={item.id} style={styles.secondaryCardWrapper}>
+                  {renderSecondaryCard(item)}
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -76,8 +122,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  container: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.massive,
+  },
+  container: {
     padding: spacing.xl,
   },
   heading: {
@@ -85,27 +136,87 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: spacing.xl,
   },
-  row: {
+  section: {
+    marginBottom: spacing.xxl,
+  },
+  sectionTitle: {
+    ...typography.body,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+    textTransform: "uppercase",
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  primaryCardWrapper: {
+    marginBottom: spacing.md,
+  },
+  primaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 2,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  primaryCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  primaryIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    backgroundColor: colors.secondary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  primaryTextContainer: {
+    flex: 1,
+  },
+  primaryLabel: {
+    ...typography.h3,
+    color: colors.textPrimary,
+    fontWeight: "700",
+  },
+  primarySubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  secondaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
   },
-  listContent: {
-    paddingBottom: spacing.massive,
-  },
-  card: {
-    backgroundColor: colors.surface,
+  secondaryCardWrapper: {
     width: "48%",
-    paddingVertical: spacing.xxl,
+    marginBottom: spacing.md,
+  },
+  secondaryCard: {
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
+    padding: spacing.lg,
     alignItems: "center",
-    marginBottom: spacing.xl,
     borderWidth: 1,
     borderColor: colors.borderLight,
+    minHeight: 100,
+    justifyContent: "center",
   },
-  label: {
-    marginTop: spacing.md,
+  secondaryLabel: {
     ...typography.body,
     fontWeight: "500",
     color: colors.textPrimary,
+    marginTop: spacing.sm,
     textAlign: "center",
   },
 });

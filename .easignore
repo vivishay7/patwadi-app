@@ -1,0 +1,26 @@
+# Native folders — EAS runs prebuild on the server
+android/
+ios/
+
+# Dependencies and caches (reinstalled on EAS)
+node_modules/
+.expo/
+
+# Not needed for the mobile build
+supabase/
+docs/
+scripts/
+smoke-screenshots/
+.cursor/
+
+# Dev artifacts and docs
+*.md
+*.log
+*.zip
+session12*
+smoke-*
+device_screen.png
+emulator_screen.png
+ui-dump.xml
+ui_dump.xml
+patwadi.code-workspace

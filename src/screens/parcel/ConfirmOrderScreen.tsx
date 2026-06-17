@@ -1,31 +1,24 @@
-/**
- * ConfirmOrderScreen
- * Final confirmation before creating an order
- */
-
 import { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { CommonActions } from "@react-navigation/native";
 import colors from "../../theme/colors";
 import { spacing, radius, typography } from "../../constants";
-import { HomeStackParamList } from "../../navigation/HomeStack";
-import { createOrder } from "../../services/orderService";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../navigation/RootNavigator";
+import Constants from "expo-constants";
 import { useAuth } from "../../context/AuthContext";
+import { savePendingCheckout } from "../../lib/checkout/pendingCheckout";
+import { LoadingButton } from "../../components/LoadingButton";
+import {
+  createRazorpayOrder,
+  openRazorpayCheckout,
+  verifyRazorpayPayment,
+  skipDevPayment,
+} from "../../services/paymentService";
 
-type NavigationProp = NativeStackNavigationProp<HomeStackParamList, "ConfirmOrder">;
-type RouteProps = RouteProp<HomeStackParamList, "ConfirmOrder">;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, "ConfirmOrder">;
+type RouteProps = RouteProp<RootStackParamList, "ConfirmOrder">;
 
 export default function ConfirmOrderScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -33,60 +26,165 @@ export default function ConfirmOrderScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const { pickup, dropoff, weight, contents, priceEstimate } = route.params || {};
+  const pickup = route.params?.pickup;
+  const dropoff = route.params?.dropoff;
+  const packageInfo = route.params?.packageInfo;
+  const priceEstimate = route.params?.priceEstimate;
+  const corridorKey = route.params?.corridorKey;
+
+  const weight = packageInfo?.weight;
+  const dimensions = packageInfo?.dimensions;
+  const contents = packageInfo?.contents;
+  const packagingCharge = packageInfo?.packagingCharge || 0;
+  const discount = packageInfo?.discount || 0;
+  const priorityLabel =
+    packageInfo?.priority === "24hrs"
+      ? "Next corridor slot"
+      : packageInfo?.priority === "48hrs"
+        ? "Scheduled intercity"
+        : "Standard corridor";
+  const preferredSlot = packageInfo?.preferredSlot;
+
+  const checkoutParams = {
+    pickup,
+    dropoff,
+    packageInfo,
+    priceEstimate,
+    corridorKey,
+  };
+
+  const summary = {
+    pickup: pickup
+      ? `Pickup: ${pickup.address}${pickup.apartmentBuilding ? `, ${pickup.apartmentBuilding}` : ""}`
+      : "Pickup: Not selected",
+    dropoff: dropoff
+      ? `Dropoff: ${dropoff.address}${dropoff.apartmentBuilding ? `, ${dropoff.apartmentBuilding}` : ""}`
+      : "Dropoff: Not selected",
+    parcel: weight
+      ? `Parcel: ${contents || "Items"} • ${weight}kg`
+      : `Parcel: ${contents || "Items"}`,
+    price: priceEstimate ? `Estimated: ₹${priceEstimate}` : "Price: Calculating...",
+  };
+
+  const finishOrder = (parcelId?: string) => {
+    if (parcelId) {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: "Main", params: { screen: "Packages" } },
+          { name: "TrackingDetails", params: { orderId: parcelId } },
+        ],
+      });
+      return;
+    }
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Main", params: { screen: "Packages" } }],
+    });
+  };
+
+  const startGuestAccountFlow = async (mode: "signup" | "signin") => {
+    if (!pickup || !dropoff) return;
+    await savePendingCheckout(checkoutParams);
+    navigation.navigate("Login", { mode, resumeCheckout: true });
+  };
+
+  const handleDevSkipPayment = async () => {
+    if (!pickup || !dropoff || !corridorKey || !user?.id) return;
+
+    setLoading(true);
+    try {
+      const result = await skipDevPayment({
+        corridorKey,
+        pickup_location: pickup.address,
+        dropoff_location: dropoff.address,
+        weight_kg: weight ? Number(weight) : undefined,
+        dimensions: dimensions || undefined,
+        contents: contents || undefined,
+        price_estimate: priceEstimate || undefined,
+      });
+      if ("error" in result) {
+        Alert.alert("Dev skip failed", result.error);
+        return;
+      }
+      finishOrder(result.parcelId);
+    } catch (error) {
+      console.error("Dev skip payment error:", error);
+      Alert.alert("Error", "Failed to create dev order.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleConfirm = async () => {
-    if (!user?.id || !pickup || !dropoff) {
-      Alert.alert("Error", "Missing required data. Please try again.");
+    if (!pickup || !dropoff) {
+      Alert.alert("Error", "Please select pickup and dropoff locations");
+      return;
+    }
+
+    if (!user?.id) {
+      await startGuestAccountFlow("signup");
+      return;
+    }
+    if (!corridorKey) {
+      Alert.alert("Corridor not supported", "We're not live on this corridor yet.");
+      return;
+    }
+
+    const razorpayKeyId = (Constants.expoConfig?.extra as any)?.razorpayKeyId as string | undefined;
+    if (!razorpayKeyId) {
+      Alert.alert("Payment not configured", "Missing EXPO_PUBLIC_RAZORPAY_KEY_ID.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const result = await createOrder(user.id, {
-        pickup,
-        dropoff,
-        weightKg: weight || 0,
-        contents: contents || "",
-        priceEstimate,
-      });
-
-      if (result.error) {
-        Alert.alert("Error", result.error);
-        setLoading(false);
+      const amountInPaise = Math.round((priceEstimate || 0) * 100);
+      if (!amountInPaise || amountInPaise < 100) {
+        Alert.alert("Invalid amount", "Unable to start payment for this amount.");
         return;
       }
 
-      // Order created successfully
-      Alert.alert(
-        "Order Created!",
-        "Your parcel has been booked. We'll notify you when a driver accepts it.",
-        [
-          {
-            text: "View Order",
-            onPress: () => {
-              // Navigate to Packages tab
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [
-                    {
-                      name: "HomeMain",
-                    },
-                  ],
-                })
-              );
-              // @ts-ignore - Navigate to parent tab
-              navigation.getParent()?.navigate("Packages");
-            },
-          },
-          {
-            text: "OK",
-            onPress: () => navigation.navigate("HomeMain"),
-          },
-        ]
-      );
+      const rpOrder = await createRazorpayOrder({
+        amountInPaise,
+        corridorKey,
+        pickup_location: pickup.address,
+        dropoff_location: dropoff.address,
+        weight_kg: weight ? Number(weight) : undefined,
+        dimensions: dimensions || undefined,
+        contents: contents || undefined,
+        price_estimate: priceEstimate || undefined,
+      });
+      if ("error" in rpOrder) {
+        Alert.alert("Payment error", rpOrder.error);
+        return;
+      }
+
+      const checkout = await openRazorpayCheckout({
+        keyId: razorpayKeyId,
+        amountInPaise,
+        name: "Patwadi",
+        description: `Patwadi parcel (${corridorKey})`,
+        orderId: rpOrder.razorpayOrderId,
+        prefillContact: user.phone || undefined,
+      });
+      if ("error" in checkout) {
+        Alert.alert("Payment not completed", checkout.error);
+        return;
+      }
+
+      const verified = await verifyRazorpayPayment({
+        razorpay_order_id: checkout.razorpay_order_id,
+        razorpay_payment_id: checkout.razorpay_payment_id,
+        razorpay_signature: checkout.razorpay_signature,
+      });
+      if ("error" in verified) {
+        Alert.alert("Verification failed", verified.error);
+        return;
+      }
+
+      finishOrder(verified.parcelId);
     } catch (error) {
       console.error("Create order error:", error);
       Alert.alert("Error", "Failed to create order. Please try again.");
@@ -95,131 +193,108 @@ export default function ConfirmOrderScreen() {
     }
   };
 
-  if (!pickup || !dropoff) {
-    return (
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color={colors.error} />
-          <Text style={styles.errorText}>Missing order data</Text>
-          <TouchableOpacity
-            style={styles.errorButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.errorButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const isGuest = !user?.id;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <ScrollView 
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-            disabled={loading}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>Confirm Order</Text>
-            <Text style={styles.subtitle}>
-              Review your order details
+      <View style={styles.container}>
+        <Text style={styles.title}>Confirm Order</Text>
+        <Text style={styles.subtitle}>
+          Review your details before confirming your order.
+        </Text>
+
+        <View style={styles.progress}>
+          <View style={styles.progressDot} />
+          <View style={styles.progressLine} />
+          <View style={styles.progressDot} />
+          <View style={styles.progressLine} />
+          <View style={styles.progressDot} />
+          <View style={styles.progressLine} />
+          <View style={styles.progressDot} />
+          <View style={styles.progressLine} />
+          <View style={[styles.progressDot, styles.progressActive]} />
+        </View>
+        <Text style={styles.stepLabel}>Step 5 of 5</Text>
+
+        {isGuest ? (
+          <View style={styles.guestBanner}>
+            <Text style={styles.guestBannerTitle}>Almost done!</Text>
+            <Text style={styles.guestBannerText}>
+              Create a free account to pay and track this parcel. Your pickup, dropoff, and parcel
+              details are saved — you will not need to enter them again.
+            </Text>
+            <Text style={styles.guestBannerHint}>
+              Your pickup contact number stays on the order only; it is not used as your login
+              number unless you choose it at sign-up.
             </Text>
           </View>
-        </View>
+        ) : null}
 
-        {/* Success Preview */}
-        <View style={styles.successPreview}>
-          <Ionicons name="checkmark-circle" size={40} color={colors.success} />
-          <Text style={styles.successText}>Ready to book!</Text>
-        </View>
-
-        {/* Order Summary Card */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Route</Text>
-          
-          {/* Pickup */}
-          <View style={styles.locationRow}>
-            <View style={[styles.locationDot, styles.pickupDot]} />
-            <View style={styles.locationContent}>
-              <Text style={styles.locationLabel}>Pickup</Text>
-              <Text style={styles.locationAddress}>{pickup.placeName || pickup.address}</Text>
-            </View>
-          </View>
-
-          <View style={styles.routeLine} />
-
-          {/* Dropoff */}
-          <View style={styles.locationRow}>
-            <View style={[styles.locationDot, styles.dropoffDot]} />
-            <View style={styles.locationContent}>
-              <Text style={styles.locationLabel}>Drop-off</Text>
-              <Text style={styles.locationAddress}>{dropoff.placeName || dropoff.address}</Text>
-            </View>
-          </View>
+          <Text style={styles.line}>{summary.pickup}</Text>
+          {pickup?.deliveryInstructions ? (
+            <Text style={styles.hint}>Instructions: {pickup.deliveryInstructions}</Text>
+          ) : null}
+          <Text style={styles.line}>{summary.dropoff}</Text>
+          {dropoff?.deliveryInstructions ? (
+            <Text style={styles.hint}>Instructions: {dropoff.deliveryInstructions}</Text>
+          ) : null}
+          <Text style={styles.line}>{summary.parcel}</Text>
+          {packagingCharge > 0 ? (
+            <Text style={styles.line}>Packaging: ₹{packagingCharge}</Text>
+          ) : null}
+          {discount > 0 ? (
+            <Text style={[styles.line, styles.discountLine]}>Discount: -₹{discount}</Text>
+          ) : null}
+          <Text style={styles.line}>Priority: {priorityLabel}</Text>
+          {preferredSlot ? (
+            <Text style={styles.line}>Preferred Slot: {preferredSlot}</Text>
+          ) : null}
+          <Text style={styles.line}>Door-to-Door Delivery</Text>
+          <Text style={[styles.line, styles.priceLine]}>{summary.price}</Text>
         </View>
 
-        {/* Parcel Details Card */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Parcel Details</Text>
-          
-          <View style={styles.detailGrid}>
-            <View style={styles.detailItem}>
-              <Ionicons name="cube-outline" size={20} color={colors.textSecondary} />
-              <Text style={styles.detailLabel}>Contents</Text>
-              <Text style={styles.detailValue}>{contents || "Not specified"}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Ionicons name="scale-outline" size={20} color={colors.textSecondary} />
-              <Text style={styles.detailLabel}>Weight</Text>
-              <Text style={styles.detailValue}>{weight || 0} kg</Text>
-            </View>
-          </View>
-        </View>
+        {isGuest ? (
+          <>
+            <LoadingButton
+              title="Create account & checkout"
+              onPress={() => void startGuestAccountFlow("signup")}
+              style={styles.primaryBtn}
+            />
+            <TouchableOpacity
+              style={styles.signInLink}
+              onPress={() => void startGuestAccountFlow("signin")}
+            >
+              <Text style={styles.signInLinkText}>Already have an account? Sign in</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <LoadingButton
+            title="Confirm & pay"
+            isLoading={loading}
+            onPress={handleConfirm}
+            disabled={!pickup || !dropoff}
+            style={styles.primaryBtn}
+          />
+        )}
 
-        {/* Price Card */}
-        <View style={styles.priceCard}>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Estimated Price</Text>
-            <Text style={styles.priceValue}>₹{priceEstimate || 199}</Text>
-          </View>
-          <Text style={styles.priceNote}>
-            Final price confirmed on delivery
-          </Text>
-        </View>
+        {__DEV__ && !isGuest ? (
+          <TouchableOpacity
+            style={[styles.devSkipBtn, loading && styles.btnDisabled]}
+            onPress={handleDevSkipPayment}
+            activeOpacity={0.8}
+            disabled={loading || !pickup || !dropoff || !corridorKey}
+          >
+            <Text style={styles.devSkipText}>Skip payment (dev only)</Text>
+          </TouchableOpacity>
+        ) : null}
 
-        {/* Terms */}
-        <Text style={styles.terms}>
-          By confirming, you agree to our Terms of Service and acknowledge that your parcel 
-          will be transported via our bus network.
-        </Text>
-      </ScrollView>
-
-      {/* Fixed Bottom Actions */}
-      <View style={styles.bottomActions}>
         <TouchableOpacity
-          style={[styles.confirmBtn, loading && styles.buttonDisabled]}
-          onPress={handleConfirm}
-          disabled={loading}
-          activeOpacity={0.8}
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
         >
-          {loading ? (
-            <ActivityIndicator color={colors.white} size="small" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={22} color={colors.white} />
-              <Text style={styles.confirmText}>Confirm & Create Order</Text>
-            </>
-          )}
+          <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -227,218 +302,81 @@ export default function ConfirmOrderScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.xl,
-    paddingBottom: spacing.xl,
-  },
-
-  // Header
-  header: {
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, padding: spacing.xl },
+  title: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.sm },
+  subtitle: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: spacing.md },
+  progress: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: spacing.xl,
-  },
-  backButton: {
-    marginRight: spacing.md,
-    marginTop: spacing.xs,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  title: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-
-  // Success Preview
-  successPreview: {
     alignItems: "center",
-    marginBottom: spacing.xl,
-    padding: spacing.xl,
-    backgroundColor: "#DCFCE7",
-    borderRadius: radius.lg,
+    justifyContent: "center",
+    marginBottom: spacing.sm,
   },
-  successText: {
-    ...typography.bodyLarge,
-    fontWeight: "600",
-    color: colors.success,
-    marginTop: spacing.md,
-  },
-
-  // Card
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  // Location
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  locationDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: spacing.md,
-    marginTop: spacing.xs,
-  },
-  pickupDot: {
-    backgroundColor: colors.primary,
-  },
-  dropoffDot: {
-    backgroundColor: colors.success,
-  },
-  routeLine: {
-    width: 2,
-    height: 24,
+  progressDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: colors.borderLight,
-    marginLeft: 5,
-    marginVertical: spacing.sm,
   },
-  locationContent: {
-    flex: 1,
+  progressActive: { backgroundColor: colors.primary },
+  progressLine: {
+    width: 30,
+    height: 2,
+    backgroundColor: colors.borderLight,
+    marginHorizontal: spacing.xs,
   },
-  locationLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  locationAddress: {
-    ...typography.body,
-    fontWeight: "600",
-    color: colors.textPrimary,
-    marginTop: spacing.xs,
-  },
-
-  // Details Grid
-  detailGrid: {
-    flexDirection: "row",
-    gap: spacing.lg,
-  },
-  detailItem: {
-    flex: 1,
-    alignItems: "center",
-    padding: spacing.lg,
-    backgroundColor: colors.secondary,
-    borderRadius: radius.md,
-  },
-  detailLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-  },
-  detailValue: {
-    ...typography.body,
-    fontWeight: "600",
-    color: colors.textPrimary,
-    marginTop: spacing.xs,
-  },
-
-  // Price Card
-  priceCard: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  priceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  priceLabel: {
-    ...typography.body,
-    color: "rgba(255,255,255,0.8)",
-  },
-  priceValue: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.white,
-  },
-  priceNote: {
-    ...typography.caption,
-    color: "rgba(255,255,255,0.6)",
-    marginTop: spacing.sm,
-  },
-
-  // Terms
-  terms: {
+  stepLabel: {
     ...typography.caption,
     color: colors.textSecondary,
     textAlign: "center",
-    lineHeight: 18,
+    marginBottom: spacing.lg,
   },
-
-  // Bottom Actions
-  bottomActions: {
-    padding: spacing.xl,
-    paddingTop: spacing.lg,
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  confirmBtn: {
-    backgroundColor: colors.success,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.md,
-    minHeight: 52,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  confirmText: {
-    ...typography.button,
-    color: colors.white,
-  },
-
-  // Error State
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.error,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  errorButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xxl,
+  guestBanner: {
+    backgroundColor: colors.secondary,
     borderRadius: radius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
-  errorButtonText: {
-    ...typography.button,
-    color: colors.white,
+  guestBannerTitle: {
+    ...typography.body,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
   },
+  guestBannerText: { ...typography.bodySmall, color: colors.textPrimary, marginBottom: spacing.sm },
+  guestBannerHint: { ...typography.caption, color: colors.textSecondary },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing.xl,
+  },
+  line: { ...typography.body, color: colors.textPrimary, marginBottom: spacing.sm },
+  hint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginLeft: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  discountLine: { color: colors.success, fontWeight: "600" },
+  priceLine: { fontWeight: "700", marginTop: spacing.sm, marginBottom: 0 },
+  primaryBtn: { marginTop: spacing.xxl },
+  signInLink: { marginTop: spacing.lg, alignItems: "center" },
+  signInLinkText: { ...typography.body, color: colors.primary, fontWeight: "600" },
+  btnDisabled: { opacity: 0.6 },
+  devSkipBtn: {
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.warning,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    marginTop: spacing.lg,
+  },
+  devSkipText: { ...typography.button, color: colors.warning, fontSize: 14 },
+  backBtn: { marginTop: spacing.lg, alignItems: "center" },
+  backText: { ...typography.body, color: colors.textSecondary },
 });

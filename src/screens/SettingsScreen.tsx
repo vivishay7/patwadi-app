@@ -1,80 +1,63 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import colors from "../theme/colors";
-import { spacing, radius, typography } from "../constants";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRole } from "../context/RoleContext";
-import { useAuth } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/RootNavigator";
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-interface MenuItem {
-  id: number;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}
-
-const menuItems: MenuItem[] = [
-  { id: 1, label: "Manage Availability", icon: "time-outline" },
-  { id: 2, label: "Edit Signature", icon: "pencil-outline" },
-  { id: 3, label: "Auto Message", icon: "chatbox-ellipses-outline" },
-  { id: 4, label: "Saved Locations", icon: "location-outline" },
-  { id: 5, label: "Automation", icon: "repeat-outline" },
-  { id: 6, label: "Help & Support", icon: "help-circle-outline" },
-];
+import { deleteUserAccount } from "../lib/api/auth";
+import { clearPendingCheckout } from "../lib/checkout/pendingCheckout";
+import LanguageToggle from "../components/LanguageToggle";
+import { useAuth } from "../context/AuthContext";
+import colors from "../theme/colors";
+import { spacing, radius, typography } from "../constants";
 
 export default function SettingsScreen() {
-  const navigation = useNavigation<NavigationProp>();
-  const { role, setRole, canSwitchRole, isAuthenticatedRole } = useRole();
-  const { user, isGuest, signOut } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user, signOut, setUser } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const handleRoleSwitch = () => {
-    if (!canSwitchRole) {
-      Alert.alert(
-        "Cannot Switch Role",
-        "You are logged in with a specific role. To change your role, please contact support or create a new account.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-
-    setRole(role === "customer" ? "driver" : "customer");
+  const handleLogout = () => {
+    Alert.alert("Log out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: async () => {
+          setSigningOut(true);
+          try {
+            await signOut();
+          } finally {
+            setSigningOut(false);
+          }
+        },
+      },
+    ]);
   };
 
-  const handleLogout = async () => {
-    if (isGuest) {
-      // Guest users just go back to splash
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Splash" }],
-      });
-      return;
-    }
-
+  const handleDeleteAccount = () => {
     Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
+      "Delete account?",
+      "This removes your Patwadi profile. You will be signed out. Contact support if you have active parcels.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Logout",
+          text: "Delete account",
           style: "destructive",
           onPress: async () => {
-            await signOut();
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "Splash" }],
-            });
+            if (!user?.id) return;
+            setDeleting(true);
+            try {
+              const result = await deleteUserAccount(user.id);
+              if (result.error) {
+                Alert.alert("Could not delete", result.error);
+                return;
+              }
+              await clearPendingCheckout();
+              setUser(null);
+            } finally {
+              setDeleting(false);
+            }
           },
         },
       ]
@@ -82,243 +65,175 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.heading}>Settings</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Settings</Text>
 
-        {/* User Info Card */}
-        {!isGuest && user && (
-          <View style={styles.userCard}>
-            <View style={styles.userAvatar}>
-              <Ionicons name="person" size={24} color={colors.white} />
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.userPhone}>{user.phone || "No phone"}</Text>
-              <Text style={styles.userRole}>
-                {role === "driver" ? "🚌 Driver" : "📦 Customer"}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Guest Banner */}
-        {isGuest && (
-          <View style={styles.guestBanner}>
-            <Ionicons name="person-outline" size={20} color={colors.textSecondary} />
-            <Text style={styles.guestText}>You're browsing as a guest</Text>
-            <TouchableOpacity
-              style={styles.loginButton}
-              onPress={() => navigation.navigate("Login")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.loginButtonText}>Login</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Menu Grid */}
-        <View style={styles.grid}>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.card}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={item.icon}
-                size={24}
-                color={colors.white}
-                style={styles.icon}
-              />
-              <Text style={styles.label}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
+      {user?.id ? (
+        <View style={styles.card}>
+          <Text style={styles.accountLabel}>Signed in</Text>
+          {user.full_name ? (
+            <Text style={styles.accountValue}>{user.full_name}</Text>
+          ) : null}
+          <Text style={[styles.accountValue, user.full_name && styles.accountSub]}>
+            {user.email || user.phone || user.id}
+          </Text>
         </View>
+      ) : (
+        <View style={styles.card}>
+          <Text style={styles.accountLabel}>Browsing as guest</Text>
+          <TouchableOpacity
+            style={styles.loginLink}
+            onPress={() => navigation.navigate("Login")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.loginLinkText}>Log in</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-        {/* ROLE SWITCHER */}
+      <LanguageToggle compact />
+
+      {user?.id && (
         <TouchableOpacity
-          style={[
-            styles.roleBtn,
-            !canSwitchRole && styles.roleBtnDisabled,
-          ]}
-          onPress={handleRoleSwitch}
-          activeOpacity={canSwitchRole ? 0.8 : 1}
-        >
-          <Text style={[styles.roleText, !canSwitchRole && styles.roleTextDisabled]}>
-            {canSwitchRole
-              ? `Switch to ${role === "customer" ? "Driver" : "Customer"} Mode`
-              : `Role: ${role === "customer" ? "Customer" : "Driver"} (Locked)`}
-          </Text>
-        </TouchableOpacity>
-
-        {!canSwitchRole && (
-          <Text style={styles.roleHint}>
-            Role is locked for logged-in users. Guest users can switch freely.
-          </Text>
-        )}
-
-        {/* LOGOUT */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={handleLogout}
+          style={styles.menuRow}
+          onPress={() => navigation.navigate("AddressBook")}
           activeOpacity={0.7}
         >
-          <Ionicons name="log-out-outline" size={20} color={colors.error} />
-          <Text style={styles.logoutText}>
-            {isGuest ? "Exit Guest Mode" : "Logout"}
-          </Text>
+          <Ionicons name="bookmark-outline" size={22} color={colors.primary} />
+          <Text style={styles.menuRowText}>Address book</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+      )}
+
+      {user?.id && (
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDeleteAccount}
+          disabled={deleting || signingOut}
+          activeOpacity={0.7}
+        >
+          {deleting ? (
+            <ActivityIndicator size="small" color={colors.error} />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={20} color={colors.error} />
+              <Text style={styles.deleteText}>Delete account</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {user?.id && (
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          disabled={signingOut}
+          activeOpacity={0.7}
+        >
+          {signingOut ? (
+            <ActivityIndicator size="small" color={colors.error} />
+          ) : (
+            <>
+              <Ionicons name="log-out-outline" size={20} color={colors.error} />
+              <Text style={styles.logoutText}>Log out</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   container: {
     flex: 1,
-  },
-  content: {
     padding: spacing.xl,
-    paddingBottom: spacing.massive,
+    backgroundColor: colors.background,
   },
-
-  heading: {
+  title: {
     ...typography.h1,
     color: colors.textPrimary,
     marginBottom: spacing.xl,
   },
-
-  // User card
-  userCard: {
-    flexDirection: "row",
-    alignItems: "center",
+  card: {
     backgroundColor: colors.surface,
-    padding: spacing.lg,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    marginBottom: spacing.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.xxl,
-    backgroundColor: colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: spacing.lg,
+  accountLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
   },
-  userInfo: {
-    flex: 1,
-  },
-  userPhone: {
-    ...typography.bodyLarge,
-    fontWeight: "600",
+  accountValue: {
+    ...typography.body,
     color: colors.textPrimary,
   },
-  userRole: {
-    ...typography.bodySmall,
+  accountSub: {
+    ...typography.caption,
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
-
-  // Guest banner
-  guestBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.secondary,
-    padding: spacing.lg,
-    borderRadius: radius.md,
-    marginBottom: spacing.xl,
-    gap: spacing.md,
+  loginLink: {
+    marginTop: spacing.sm,
   },
-  guestText: {
+  loginLinkText: {
     ...typography.body,
-    color: colors.textSecondary,
-    flex: 1,
+    fontWeight: "600",
+    color: colors.primary,
   },
-  loginButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.sm,
-  },
-  loginButtonText: {
-    ...typography.buttonSmall,
-    color: colors.white,
-  },
-
-  // Grid
-  grid: {
+  menuRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-
-  card: {
-    backgroundColor: colors.primary,
-    width: "48%",
-    borderRadius: radius.lg,
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
     alignItems: "center",
-  },
-
-  icon: {
-    marginBottom: spacing.md,
-  },
-
-  label: {
-    ...typography.buttonSmall,
-    color: colors.white,
-    textAlign: "center",
-  },
-
-  // Role button
-  roleBtn: {
-    backgroundColor: colors.black,
+    gap: spacing.md,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
-    paddingVertical: spacing.xl,
-    alignItems: "center",
-    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  roleBtnDisabled: {
-    backgroundColor: colors.dark,
-    opacity: 0.6,
+  menuRowText: {
+    ...typography.body,
+    flex: 1,
+    color: colors.textPrimary,
+    fontWeight: "600",
   },
-  roleText: {
-    ...typography.button,
-    color: colors.white,
-  },
-  roleTextDisabled: {
-    color: colors.textSecondary,
-  },
-  roleHint: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    textAlign: "center",
-    marginTop: spacing.md,
-  },
-
-  // Logout
-  logoutBtn: {
-    marginTop: spacing.xxl,
+  logoutButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.error,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: spacing.md,
+    marginTop: spacing.xl,
+  },
+  deleteText: {
+    ...typography.body,
+    fontWeight: "600",
+    color: colors.textSecondary,
   },
   logoutText: {
     ...typography.body,
+    fontWeight: "600",
     color: colors.error,
   },
 });
