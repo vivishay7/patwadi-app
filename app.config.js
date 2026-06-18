@@ -10,7 +10,7 @@ export default {
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
-    newArchEnabled: false,
+    newArchEnabled: true,
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -19,8 +19,18 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.patwadi.app",
+      buildNumber: "1",
       infoPlist: {
         UIBackgroundModes: ["location"],
+        LSApplicationQueriesSchemes: [
+          "upi",
+          "phonepe",
+          "gpay",
+          "paytmmp",
+          "bhim",
+          "credpay",
+          "mobikwik",
+        ],
       },
     },
     android: {
@@ -41,7 +51,7 @@ export default {
         "READ_MEDIA_IMAGES",
         "POST_NOTIFICATIONS",
       ],
-      privacyPolicy: "https://patwadi.com/privacy-policy.html",
+      privacyPolicy: "https://patwadi.com/docs/privacy-policy",
     },
     web: {
       favicon: "./assets/favicon.png",
@@ -78,7 +88,7 @@ export default {
       mapboxToken: process.env.EXPO_PUBLIC_MAPBOX_TOKEN,
       razorpayKeyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID,
       supportWhatsapp: process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP,
-      privacyPolicyUrl: "https://patwadi.com/privacy-policy.html",
+      privacyPolicyUrl: "https://patwadi.com/docs/privacy-policy",
     },
   },
 };
