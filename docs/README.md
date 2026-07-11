@@ -22,8 +22,10 @@ If you do not see this folder in the Cursor sidebar, you may have opened the **n
 | [operator-agreement-template.md](./operator-agreement-template.md) | Pilot operator agreement template (draft — legal review required) |
 | [operator-agreement.html](./operator-agreement.html) | Published operator agreement draft (HTML) → [patwadi.com/operator-agreement.html](https://patwadi.com/operator-agreement.html) |
 | [refund-dispute-policy-customer.md](./refund-dispute-policy-customer.md) | Customer-facing refunds, cancellations & claims (source markdown) |
-| [refunds.html](./refunds.html) | Refunds & claims page (HTML) → [patwadi.com/refunds.html](https://patwadi.com/refunds.html) |
-| [refunds-policy.html](./refunds-policy.html) | Alias redirect to `refunds.html` |
+| [refunds-policy.html](./refunds-policy.html) | Refunds & claims page (HTML) → [patwadi.com/refunds-policy.html](https://patwadi.com/refunds-policy.html) |
+| [refunds.html](./refunds.html) | Legacy redirect to `refunds-policy.html` |
+| [operator-onboarding-packet.md](./operator-onboarding-packet.md) | Operator-facing onboarding guide (source markdown) |
+| [operator-onboarding.html](./operator-onboarding.html) | Operator onboarding packet (HTML) → [patwadi.com/operator-onboarding.html](https://patwadi.com/operator-onboarding.html) |
 | [refund-dispute-policy-internal.md](./refund-dispute-policy-internal.md) | Internal refund & dispute SOP |
 | [operator-rate-card-pilot.md](./operator-rate-card-pilot.md) | Pilot operator earnings / settlement structure |
 | [policy-coverage-matrix.md](./policy-coverage-matrix.md) | Policy checklist vs patwadi.com, repo docs, and in-app surfaces |

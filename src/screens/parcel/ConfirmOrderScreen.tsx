@@ -23,7 +23,7 @@ type RouteProps = RouteProp<RootStackParamList, "ConfirmOrder">;
 
 const TERMS_URL = "https://patwadi.com/terms.html";
 const SHIPPING_POLICY_URL = "https://patwadi.com/shipping.html";
-const REFUNDS_POLICY_URL = "https://patwadi.com/refunds.html";
+const REFUNDS_POLICY_URL = "https://patwadi.com/refunds-policy.html";
 
 export default function ConfirmOrderScreen() {
   const navigation = useNavigation<NavigationProp>();
