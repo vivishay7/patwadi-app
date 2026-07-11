@@ -108,6 +108,11 @@ const MISSING_FIELD_LABELS: Record<RequiredFieldKey, string> = {
   legalAgreed: "Legal contents confirmation",
 };
 
+// Fine for pilot: declared value caps enforced here only (₹5k electronics / ₹10k general).
+// TODO: enforce declared value caps server-side in create-razorpay-order
+const ELECTRONICS_VALUE_CAP = 5000;
+const GENERAL_VALUE_CAP = 10000;
+
 export default function PackageInfoScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
@@ -391,6 +396,19 @@ export default function PackageInfoScreen() {
   }, [packageInfo.imageUri]);
 
 
+  const declaredValueNum = packageInfo.packageValue.trim()
+    ? parseInt(packageInfo.packageValue, 10)
+    : null;
+  const isElectronics = packageInfo.packageType === "electronics";
+  const packageValueCapError =
+    declaredValueNum !== null && !isNaN(declaredValueNum)
+      ? isElectronics && declaredValueNum > ELECTRONICS_VALUE_CAP
+        ? "Maximum declared value for electronics is ₹5,000."
+        : !isElectronics && declaredValueNum > GENERAL_VALUE_CAP
+          ? "Maximum declared value is ₹10,000 during pilot."
+          : null
+      : null;
+
   const canProceed =
     packageInfo.packageType &&
     packageInfo.contents.trim() &&
@@ -403,7 +421,8 @@ export default function PackageInfoScreen() {
     !packageInfo.dimensionErrors.length &&
     !packageInfo.dimensionErrors.width &&
     !packageInfo.dimensionErrors.height &&
-    packageInfo.legalAgreed;
+    packageInfo.legalAgreed &&
+    !packageValueCapError;
 
   const missingFields = getMissingFields(packageInfo);
   canProceedRef.current = !!canProceed;
@@ -602,6 +621,14 @@ export default function PackageInfoScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {packageInfo.packageType === "electronics" && (
+              <View style={styles.electronicsWarning}>
+                <Text style={styles.electronicsWarningText}>
+                  Electronics: maximum declared value ₹5,000 during pilot. For higher-value items,
+                  contact us before booking.
+                </Text>
+              </View>
+            )}
             {highlight("packageType") && (
               <Text style={styles.missingHint}>Select a package type to continue</Text>
             )}
@@ -637,7 +664,10 @@ export default function PackageInfoScreen() {
               Estimated Package Value (₹) *
             </Text>
             <TextInput
-              style={[styles.input, highlight("packageValue") && styles.inputError]}
+              style={[
+                styles.input,
+                (highlight("packageValue") || packageValueCapError) && styles.inputError,
+              ]}
               placeholder="e.g., 5000"
               placeholderTextColor={colors.textSecondary}
               value={packageInfo.packageValue}
@@ -656,6 +686,9 @@ export default function PackageInfoScreen() {
             <Text style={styles.hint}>
               Required for insurance coverage
             </Text>
+            {packageValueCapError && (
+              <Text style={styles.valueCapError}>{packageValueCapError}</Text>
+            )}
             {highlight("packageValue") && (
               <Text style={styles.missingHint}>Enter estimated value in rupees (digits only)</Text>
             )}
@@ -1404,6 +1437,23 @@ const styles = StyleSheet.create({
   },
   typeLabelSelected: {
     color: colors.white,
+  },
+  electronicsWarning: {
+    backgroundColor: "#FAEEDA",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  electronicsWarningText: {
+    fontSize: 13,
+    color: "#633806",
+    lineHeight: 18,
+  },
+  valueCapError: {
+    ...typography.caption,
+    color: colors.error,
+    marginTop: spacing.xs,
+    fontWeight: "500",
   },
   input: {
     backgroundColor: colors.surface,

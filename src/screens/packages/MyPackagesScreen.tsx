@@ -15,7 +15,7 @@ import { useNavigation, useFocusEffect, useRoute, RouteProp } from "@react-navig
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/RootNavigator";
 import { CustomerTabParamList } from "../../navigation/MainTabs";
-import { fetchOrders, getOrderById } from "../../services/orderService";
+import { fetchOrders, resolveOrderLookup } from "../../services/orderService";
 import { fetchCustodyEventsForParcels } from "../../services/custodyService";
 import { useAuth } from "../../context/AuthContext";
 import { Order, CustodyEvent } from "../../lib/db/types";
@@ -82,17 +82,17 @@ export default function MyPackagesScreen() {
 
   const handleTrackOrder = async () => {
     if (!trackingOrderId.trim()) {
-      Alert.alert("Error", "Please enter an order ID");
+      Alert.alert("Error", "Please enter a tracking code");
       return;
     }
 
     setTrackingLoading(true);
     try {
-      const order = await getOrderById(trackingOrderId.trim());
+      const order = await resolveOrderLookup(trackingOrderId.trim());
       if (order) {
         navigation.navigate("TrackingDetails", { orderId: order.id });
       } else {
-        Alert.alert("Order Not Found", "Please check the order ID and try again.");
+        Alert.alert("Order Not Found", "Please check the tracking code and try again.");
       }
     } catch (error) {
       console.error("Error tracking order:", error);
@@ -119,7 +119,9 @@ export default function MyPackagesScreen() {
     >
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>Order #{item.id.slice(0, 8)}</Text>
+          <Text style={styles.orderId}>
+            {item.tracking_code ?? `Order #${item.id.slice(0, 8)}`}
+          </Text>
           <Text style={styles.orderDate}>
             {new Date(item.created_at).toLocaleDateString()}
           </Text>
@@ -178,12 +180,14 @@ export default function MyPackagesScreen() {
   const renderTrackingSection = () => (
     <View style={styles.trackingSection}>
       <Text style={styles.trackingTitle}>Track a Package</Text>
-      <Text style={styles.trackingSubtitle}>Enter your order ID to track your parcel</Text>
+      <Text style={styles.trackingSubtitle}>
+        Enter your tracking code (e.g. P262006001DC) or order ID
+      </Text>
       <View style={styles.trackingInputContainer}>
         <TextInput
           ref={trackInputRef}
           style={styles.trackingInput}
-          placeholder="Enter Order ID"
+          placeholder="Tracking code or order ID"
           placeholderTextColor={colors.textSecondary}
           value={trackingOrderId}
           onChangeText={setTrackingOrderId}

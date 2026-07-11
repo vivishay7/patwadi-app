@@ -1896,7 +1896,7 @@ This session gates the EAS build — nothing gets built until this
 passes.
 
 1. PRIVACY POLICY LIVE
-   Fetch https://patwadi.com/privacy-policy.html via HTTP.
+   Fetch https://patwadi.com/docs/privacy-policy via HTTP.
    Confirm it returns 200 and contains the privacy policy content
    (not a 404 or redirect to the homepage).
    If not live: report exactly what needs to be pushed to GitHub Pages
@@ -1960,3 +1960,80 @@ vs manual action by user).
 ```powershell
 eas build --platform android --profile preview
 ```
+
+---
+
+## Session 24 — Play Store assets + iOS build config
+
+**Model: default**.
+
+**/goal**: feature graphic generated (1024×500), Play Store listing copy drafted,
+screenshot brief written, iOS EAS profiles and app.config.js iOS fields set,
+or stop after 15 turns.
+
+```
+1. FEATURE GRAPHIC
+   Generate assets/feature-graphic.png programmatically (sharp):
+   1024×500, #FF3A22 background, white "Patwadi" left, "Every parcel.
+   Verified." right. Extend scripts/generate-brand-assets.mjs.
+
+2. PLAY STORE COPY
+   Write docs/play-store-listing.md:
+   - 3 short description options (≤80 chars), recommend one
+   - Full description 500-800 words: intercity linehaul cargo, custody-first,
+     North India, no "fast"/"same-day"/invented stats
+   - Read PATWADI_LAUNCH_ARCHITECTURE.md positioning
+
+3. EAS.JSON iOS PROFILES
+   Add to preview: ios.simulator false
+   Add to production: ios build config for App Store (Release)
+
+4. APP.CONFIG.JS iOS
+   - ios.buildNumber: "1"
+   - ios.infoPlist.LSApplicationQueriesSchemes: UPI wallet schemes
+
+5. SCREENSHOT BRIEF
+   docs/play-store-screenshots.md — 5-6 screenshots listed
+
+Do NOT run eas build. Confirm feature-graphic.png dimensions.
+```
+
+**Session 24 — COMPLETE**
+
+- `assets/feature-graphic.png` generated via `scripts/generate-brand-assets.mjs` (sharp SVG → PNG, 1024×500 verified).
+- `docs/play-store-listing.md` — three short descriptions; **recommended: option A** ("Intercity parcel delivery on verified corridors. Every handoff verified."); full description ~650 words, custody-first / North India corridor positioning.
+- `docs/play-store-screenshots.md` — six screenshot slots with screen names and caption ideas.
+- `eas.json` — preview `ios.simulator: false`; production `ios.simulator: false` + `buildConfiguration: "Release"` (EAS iOS equivalent of release build; `buildType` is Android-only).
+- `app.config.js` — `ios.buildNumber: "1"`, `LSApplicationQueriesSchemes` for UPI apps.
+- No EAS build run (per session gate).
+
+---
+
+## Session 25 — Operator agreement gate on first login
+
+**Model: default**.
+
+**/goal**: approved active operators without `operator_agreement_accepted_at` land on
+`OperatorAgreementScreen` before Main; acceptance is server-timestamped via RPC;
+operational edge functions / attach RPC return 403 if agreement missing, or stop
+after 20 turns.
+
+```
+1. SCHEMA — profiles.operator_agreement_accepted_at + accept_operator_agreement() RPC
+2. POST-AUTH ROUTING — approved + active + NULL → OperatorAgreement; accepted → Main
+3. OperatorAgreementScreen — key terms a–f, checkbox, Linking to terms.html
+4. SERVER — accept_operator_agreement() sets now() WHERE auth.uid() AND role IN (lmp,linehaul)
+5. SAFETY NET — add-co-conductor, request-trip-transfer, attach_parcel_to_linehaul_trip
+6. RootNavigator registration + Profile / AppUser types
+```
+
+**Session 25 — COMPLETE**
+
+- `supabase/schema/phase25_operator_agreement.sql` — column, privilege trigger update, `accept_operator_agreement()` RPC, `attach_parcel_to_linehaul_trip` agreement guard.
+- Migration applied to **patwadi-dev** (`wvxyaqqlqwbbpkgvrali`) via Supabase MCP.
+- `OperatorAgreementScreen.tsx` — scrollable key terms a–f, checkbox gate, `LoadingButton` “Start operating”, `accept_operator_agreement` RPC on accept.
+- `postAuthRoute.ts` — `OperatorAgreement` route for approved active operators with NULL acceptance.
+- Edge functions `add-co-conductor` and `request-trip-transfer` — 403 `"Agreement not accepted."` when `operator_agreement_accepted_at` IS NULL (**redeploy required**).
+- Types + `buildAppUser` / `AuthContext.refreshUser` include `operator_agreement_accepted_at`.
+
+**Verify (manual):** Sign in as `testlinehaul@patwadi.com` → expect `OperatorAgreementScreen` → accept → Main. Before accept, `attach_parcel_to_linehaul_trip` and co-conductor/transfer calls should 403. Emulator not run in this session.

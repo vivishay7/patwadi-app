@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
 import { deriveParcelState } from "../lib/deriveParcelState";
-import { CustodyEvent, Order, ParcelRecovery, LinehaulTrip, LinehaulTripTransferRequest } from "../lib/db/types";
+import { CustodyEvent, Order, ParcelRecovery, LinehaulTrip, LinehaulTripTransferRequest, Profile } from "../lib/db/types";
 import { fetchCustodyEvents } from "./custodyService";
 import {
   buildCorridorKey,
@@ -80,6 +80,41 @@ export async function adminResolveBlocked(params: { parcelId: string; unblock: b
   if (error) throw error;
   if (!data?.ok) throw new Error(data?.error || "Failed to resolve blocked parcel");
   return data;
+}
+
+/** Session 22 — list approved LMP operators for admin assignment form. */
+export async function fetchAssignableLmps(): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, phone, role, approval_status")
+    .eq("role", "lmp")
+    .eq("approval_status", "approved")
+    .order("full_name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Profile[];
+}
+
+/** Session 22 — Option A: admin RPC assign_lmp_to_order. */
+export async function assignLmpToOrder(params: {
+  orderId: string;
+  lmpPickupId: string;
+  lmpDeliveryId: string;
+  linehaulId?: string;
+}) {
+  const { data, error } = await supabase.rpc("assign_lmp_to_order", {
+    p_order_id: params.orderId,
+    p_lmp_pickup_id: params.lmpPickupId,
+    p_lmp_delivery_id: params.lmpDeliveryId,
+    p_linehaul_id: params.linehaulId ?? null,
+  });
+  if (error) throw error;
+  if (!data?.ok) throw new Error("Failed to assign LMP operators");
+  return data as {
+    ok: true;
+    order_id: string;
+    lmp_pickup_id: string;
+    lmp_delivery_id: string;
+  };
 }
 
 /** v6 §7 — rescind one parcel from a trip (auto reassign vs exception). */

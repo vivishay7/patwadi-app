@@ -6,13 +6,15 @@ export type PostAuthRoute =
   | "CompleteProfile"
   | "RoleSelect"
   | "Main"
-  | "OperatorPending";
+  | "OperatorPending"
+  | "OperatorAgreement";
 
 export function resolvePostAuthRoute(user: AppUser): PostAuthRoute {
   if (user.isAdmin) return "Admin";
   if (!isProfileIdentityComplete(user.full_name)) return "CompleteProfile";
   if (user.role === "lmp" || user.role === "linehaul") {
     if (user.approval_status === "approved" && user.operator_status === "active") {
+      if (!user.operator_agreement_accepted_at) return "OperatorAgreement";
       return "Main";
     }
     return "OperatorPending";

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -121,8 +122,11 @@ export default function LoginScreen() {
 
   const [devTapCount, setDevTapCount] = useState(0);
 
+  const pilotTestLoginEnabled =
+    __DEV__ || (Constants.expoConfig?.extra?.pilotBuild as boolean | undefined) === true;
+
   const handleDevTitleTap = () => {
-    if (!__DEV__) return;
+    if (!pilotTestLoginEnabled) return;
     const next = devTapCount + 1;
     setDevTapCount(next);
     if (next === 5) {

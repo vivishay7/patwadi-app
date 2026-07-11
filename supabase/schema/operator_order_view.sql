@@ -2,13 +2,18 @@
 -- PATWADI operator_order_view (v6 §14)
 -- Tier 2 read path on orders: an operator sees rows where their profile id
 -- matches lmp_pickup_id, linehaul_id, or lmp_delivery_id.
--- Definer-rights view (owner bypasses orders RLS); row scoping is the
--- auth.uid() WHERE clause; security_barrier prevents leaky-function pushdown.
+-- security_invoker: underlying orders RLS applies to the querying user.
+-- Row scoping: orders policy + view WHERE (same predicate); security_barrier
+-- prevents leaky-function pushdown. Column allowlist stays on this view (§14).
 -- Run AFTER mvp_custody.sql and phase2_trips.sql
 -- ============================================
 
+CREATE POLICY "Operators can read assigned orders"
+  ON orders FOR SELECT
+  USING (auth.uid() IN (lmp_pickup_id, linehaul_id, lmp_delivery_id));
+
 CREATE OR REPLACE VIEW operator_order_view
-WITH (security_barrier) AS
+WITH (security_barrier, security_invoker = true) AS
 SELECT
   id,
   corridor_key,

@@ -1,0 +1,4 @@
+# Supabase local / deploy config (partial — extend as needed for local dev).
+
+[functions.public-track-parcel]
+verify_jwt = false

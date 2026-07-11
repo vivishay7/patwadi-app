@@ -65,6 +65,9 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Amount below minimum" }, { status: 400 });
     }
 
+    // Fine for pilot: declared value caps (₹5k electronics / ₹10k general) are UI-only on PackageInfoScreen.
+    // TODO: enforce declared value caps server-side in create-razorpay-order
+
     const rateLimit = await checkRateLimit(
       supabase,
       `create-razorpay-order:user:${user.id}`,

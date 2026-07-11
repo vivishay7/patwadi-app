@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import colors from "../../theme/colors";
 import { spacing, radius, typography } from "../../constants";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -20,11 +21,17 @@ import {
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "ConfirmOrder">;
 type RouteProps = RouteProp<RootStackParamList, "ConfirmOrder">;
 
+const TERMS_URL = "https://patwadi.com/terms.html";
+const SHIPPING_POLICY_URL = "https://patwadi.com/shipping.html";
+const REFUNDS_POLICY_URL = "https://patwadi.com/refunds.html";
+
 export default function ConfirmOrderScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [shippingPolicyAccepted, setShippingPolicyAccepted] = useState(false);
 
   const pickup = route.params?.pickup;
   const dropoff = route.params?.dropoff;
@@ -194,6 +201,11 @@ export default function ConfirmOrderScreen() {
   };
 
   const isGuest = !user?.id;
+  const canPay = termsAccepted && shippingPolicyAccepted;
+
+  const openPolicyUrl = (url: string) => {
+    void Linking.openURL(url);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -254,6 +266,11 @@ export default function ConfirmOrderScreen() {
           <Text style={[styles.line, styles.priceLine]}>{summary.price}</Text>
         </View>
 
+        <Text style={styles.storageDisclosure}>
+          Failed delivery: 2 free attempts, then ₹100/day storage after 2nd failure · max 7 days ·
+          then return-to-sender
+        </Text>
+
         {isGuest ? (
           <>
             <LoadingButton
@@ -269,13 +286,74 @@ export default function ConfirmOrderScreen() {
             </TouchableOpacity>
           </>
         ) : (
-          <LoadingButton
-            title="Confirm & pay"
-            isLoading={loading}
-            onPress={handleConfirm}
-            disabled={!pickup || !dropoff}
-            style={styles.primaryBtn}
-          />
+          <>
+            <View style={styles.termsSection}>
+              <View style={styles.termsRow}>
+                <TouchableOpacity
+                  onPress={() => setTermsAccepted((v) => !v)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={termsAccepted ? "checkbox" : "square-outline"}
+                    size={24}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.termsText}>
+                  I agree to Patwadi&apos;s{" "}
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => openPolicyUrl(TERMS_URL)}
+                  >
+                    Terms of Service
+                  </Text>
+                </Text>
+              </View>
+
+              <View style={styles.termsRow}>
+                <TouchableOpacity
+                  onPress={() => setShippingPolicyAccepted((v) => !v)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={shippingPolicyAccepted ? "checkbox" : "square-outline"}
+                    size={24}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.termsText}>
+                  I agree to Patwadi&apos;s{" "}
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => openPolicyUrl(SHIPPING_POLICY_URL)}
+                  >
+                    Shipping Policy
+                  </Text>
+                </Text>
+              </View>
+
+              <Text style={styles.refundsNote}>
+                See our{" "}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => openPolicyUrl(REFUNDS_POLICY_URL)}
+                >
+                  Refunds &amp; Claims Policy
+                </Text>{" "}
+                for cancellations, damage, and lost-parcel rules.
+              </Text>
+            </View>
+
+            <LoadingButton
+              title="Confirm & pay"
+              isLoading={loading}
+              onPress={handleConfirm}
+              disabled={!pickup || !dropoff || !canPay}
+              style={styles.primaryBtn}
+            />
+          </>
         )}
 
         {__DEV__ && !isGuest ? (
@@ -363,7 +441,43 @@ const styles = StyleSheet.create({
   },
   discountLine: { color: colors.success, fontWeight: "600" },
   priceLine: { fontWeight: "700", marginTop: spacing.sm, marginBottom: 0 },
-  primaryBtn: { marginTop: spacing.xxl },
+  storageDisclosure: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+  },
+  termsSection: {
+    marginTop: spacing.xl,
+    gap: spacing.md,
+  },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: radius.md,
+  },
+  termsText: {
+    ...typography.bodySmall,
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  termsLink: {
+    color: colors.primary,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  refundsNote: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+    paddingLeft: 32,
+  },
+  primaryBtn: { marginTop: spacing.lg },
   signInLink: { marginTop: spacing.lg, alignItems: "center" },
   signInLinkText: { ...typography.body, color: colors.primary, fontWeight: "600" },
   btnDisabled: { opacity: 0.6 },

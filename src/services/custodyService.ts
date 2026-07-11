@@ -110,14 +110,22 @@ export async function uploadCustodyPhoto(params: {
   return { path };
 }
 
+import { captureCurrentLocation } from "../lib/location/captureCurrentLocation";
+
+export type PackagingCondition = "acceptable" | "risk_acknowledged_by_customer";
+
 export async function acknowledgeHandoff(params: {
   parcelId: string;
   step: "customer_to_lmp" | "lmp_to_linehaul" | "linehaul_to_lmp" | "lmp_to_customer";
   code: string;
   photoUri: string;
   mimeType?: string;
+  packagingCondition?: PackagingCondition;
 }): Promise<{ event: CustodyEvent } | { error: string } > {
-  const { parcelId, step, code, photoUri, mimeType } = params;
+  const { parcelId, step, code, photoUri, mimeType, packagingCondition } = params;
+
+  const locationResult = await captureCurrentLocation();
+  const location = locationResult.ok ? locationResult.location : undefined;
 
   // Upload is mandatory. If upload fails, handoff fails.
   const upload = await uploadCustodyPhoto({ parcelId, step, photoUri, mimeType });
@@ -133,6 +141,10 @@ export async function acknowledgeHandoff(params: {
       code,
       photoPath: upload.path,
       mimeType: mimeType || "image/jpeg",
+      lat: location?.lat,
+      lng: location?.lng,
+      locationAccuracyM: location?.accuracyMeters,
+      ...(packagingCondition ? { packagingCondition } : {}),
     },
   });
 

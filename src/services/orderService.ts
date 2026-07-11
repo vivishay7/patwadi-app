@@ -122,6 +122,37 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
   return data;
 }
 
+/** Lookup by public tracking code (RLS: customer sees own orders only). */
+export async function getOrderByTrackingCode(code: string): Promise<Order | null> {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return null;
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("tracking_code", normalized)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getOrderByTrackingCode:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/** UUID or public tracking code — for in-app track field. */
+export async function resolveOrderLookup(input: string): Promise<Order | null> {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  if (/^P\d{9}[A-Z]{2}$/i.test(trimmed)) {
+    return getOrderByTrackingCode(trimmed);
+  }
+
+  return getOrderById(trimmed);
+}
+
 /* -----------------------------------------------------------
    DRIVER: ACCEPT ORDER
 ----------------------------------------------------------- */

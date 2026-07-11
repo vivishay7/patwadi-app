@@ -156,6 +156,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 email: profileResult.data!.email ?? prev.email,
                 approval_status: profileResult.data!.approval_status,
                 operator_status: profileResult.data!.operator_status,
+                operator_agreement_accepted_at:
+                  profileResult.data!.operator_agreement_accepted_at ?? null,
                 isAdmin: !!adminResult.data,
                 isNewUser: false,
               }

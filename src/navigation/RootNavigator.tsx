@@ -44,6 +44,7 @@ import CompleteProfileScreen from "../screens/CompleteProfileScreen";
 import { CustomerTabParamList } from "./MainTabs";
 
 import OperatorPendingScreen from "../screens/OperatorPendingScreen";
+import OperatorAgreementScreen from "../screens/OperatorAgreementScreen";
 import { LocationData } from "../types/location";
 
 /**
@@ -87,6 +88,7 @@ export type RootStackParamList = {
   RoleSelect: undefined;
 
   OperatorPending: undefined;
+  OperatorAgreement: undefined;
 
   // Main App
   Main: NavigatorScreenParams<CustomerTabParamList> | undefined;
@@ -184,6 +186,7 @@ export default function RootNavigator() {
       <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
       <Stack.Screen name="RoleSelect" component={RoleSelectScreen} />
       <Stack.Screen name="OperatorPending" component={OperatorPendingScreen} />
+      <Stack.Screen name="OperatorAgreement" component={OperatorAgreementScreen} />
 
       {/* Main App */}
       <Stack.Screen name="Main" component={MainTabs} />

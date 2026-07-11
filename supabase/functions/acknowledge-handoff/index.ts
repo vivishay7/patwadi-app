@@ -19,13 +19,63 @@ const STEPS: Step[] = [
 ];
 
 const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+const PHOTO_PATH_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(customer_to_lmp|lmp_to_linehaul|linehaul_to_lmp|lmp_to_customer)\/[^/]+$/i;
+
+const PRIOR_STEP: Record<Step, Step | null> = {
+  customer_to_lmp: null,
+  lmp_to_linehaul: "customer_to_lmp",
+  linehaul_to_lmp: "lmp_to_linehaul",
+  lmp_to_customer: "linehaul_to_lmp",
+};
+
+const STEP_ROLES: Record<Step, { from: string; to: string }> = {
+  customer_to_lmp: { from: "customer", to: "lmp" },
+  lmp_to_linehaul: { from: "lmp", to: "linehaul" },
+  linehaul_to_lmp: { from: "linehaul", to: "lmp" },
+  lmp_to_customer: { from: "lmp", to: "customer" },
+};
+
+type PackagingCondition = "acceptable" | "risk_acknowledged_by_customer";
+
+const PACKAGING_CONDITIONS: PackagingCondition[] = [
+  "acceptable",
+  "risk_acknowledged_by_customer",
+];
 
 function isValidPhotoPath(parcelId: string, step: Step, photoPath: string): boolean {
-  const prefix = `${parcelId}/${step}/`;
-  if (!photoPath.startsWith(prefix)) return false;
-  const rest = photoPath.slice(prefix.length);
-  return rest.length > 0 && !rest.includes("..");
+  if (!PHOTO_PATH_RE.test(photoPath)) return false;
+  const [pathParcelId, pathStep] = photoPath.split("/");
+  return pathParcelId === parcelId && pathStep === step;
+}
+
+async function priorCustodyStepExists(
+  supabase: ReturnType<typeof createClient>,
+  parcelId: string,
+  step: Step
+): Promise<boolean> {
+  const prior = PRIOR_STEP[step];
+  if (!prior) return true;
+  const roles = STEP_ROLES[prior];
+  const { count, error } = await supabase
+    .from("custody_events")
+    .select("id", { count: "exact", head: true })
+    .eq("parcel_id", parcelId)
+    .eq("from_role", roles.from)
+    .eq("to_role", roles.to);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+async function custodyProofExists(
+  supabase: ReturnType<typeof createClient>,
+  photoPath: string
+): Promise<boolean> {
+  const { data, error } = await supabase.storage.from("custody-proofs").download(photoPath);
+  if (error || !data) return false;
+  return data.size > 0;
 }
 
 function mapRpcError(message: string): { status: number; error: string } {
@@ -43,6 +93,12 @@ function mapRpcError(message: string): { status: number; error: string } {
   }
   if (message.includes("PRIOR_CUSTODY_STEP_MISSING")) {
     return { status: 409, error: "Prior custody step not completed" };
+  }
+  if (message.includes("PACKAGING_CONDITION_REQUIRED")) {
+    return { status: 400, error: "Packaging condition is required for pickup handoff" };
+  }
+  if (message.includes("PACKAGING_CONDITION_NOT_ALLOWED")) {
+    return { status: 400, error: "Packaging condition is only allowed for pickup handoff" };
   }
   if (message.includes("PARCEL_NOT_FOUND") || message.includes("HANDOFF_CODE_NOT_FOUND")) {
     return { status: 404, error: "Handoff not found" };
@@ -82,6 +138,15 @@ Deno.serve(async (req) => {
     const code: string = String(body.code || "").trim();
     const photoPath: string = body.photoPath;
     const mimeType: string | undefined = body.mimeType;
+    const lat: number | undefined = typeof body.lat === "number" ? body.lat : undefined;
+    const lng: number | undefined = typeof body.lng === "number" ? body.lng : undefined;
+    const locationAccuracyM: number | undefined =
+      typeof body.locationAccuracyM === "number" ? body.locationAccuracyM : undefined;
+    const packagingCondition: PackagingCondition | undefined =
+      typeof body.packagingCondition === "string" &&
+      PACKAGING_CONDITIONS.includes(body.packagingCondition as PackagingCondition)
+        ? (body.packagingCondition as PackagingCondition)
+        : undefined;
 
     if (!parcelId || !step || !code || !photoPath) {
       return corsJson({ error: "Missing required fields" }, { status: 400 });
@@ -94,6 +159,23 @@ Deno.serve(async (req) => {
     }
     if (!isValidPhotoPath(parcelId, step, photoPath)) {
       return corsJson({ error: "Invalid proof photo path" }, { status: 400 });
+    }
+
+    if (step === "customer_to_lmp" && !packagingCondition) {
+      return corsJson({ error: "Packaging condition is required for pickup handoff" }, { status: 400 });
+    }
+    if (step !== "customer_to_lmp" && packagingCondition) {
+      return corsJson({ error: "Packaging condition is only allowed for pickup handoff" }, { status: 400 });
+    }
+
+    const priorOk = await priorCustodyStepExists(supabase, parcelId, step);
+    if (!priorOk) {
+      return corsJson({ error: "Prior custody step not completed" }, { status: 409 });
+    }
+
+    const proofExists = await custodyProofExists(supabase, photoPath);
+    if (!proofExists) {
+      return corsJson({ error: "Proof photo not found in storage" }, { status: 400 });
     }
 
     const rateLimit = await checkRateLimit(
@@ -184,6 +266,10 @@ Deno.serve(async (req) => {
       p_from_user_id: user.id,
       p_photo_path: photoPath,
       p_mime_type: mimeType || "image/jpeg",
+      p_lat: lat ?? null,
+      p_lng: lng ?? null,
+      p_location_accuracy_m: locationAccuracyM ?? null,
+      p_packaging_condition: packagingCondition ?? null,
     });
 
     if (rpcErr) {

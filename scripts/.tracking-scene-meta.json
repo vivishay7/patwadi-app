@@ -1,0 +1,240 @@
+{
+  "cities": [
+    {
+      "name": "Delhi",
+      "dot": "#A8442E",
+      "motif": "India Gate arch · red sandstone domes",
+      "exportName": "delhiSkyline"
+    },
+    {
+      "name": "Jaipur",
+      "dot": "#D9748C",
+      "motif": "Pink City sandstone · scalloped jharokha arches",
+      "exportName": "jaipurSkyline"
+    },
+    {
+      "name": "Jodhpur",
+      "dot": "#5C7FA8",
+      "motif": "Mehrangarh Fort over the Blue City",
+      "exportName": "jodhpurSkyline"
+    },
+    {
+      "name": "Udaipur",
+      "dot": "#E8E0D0",
+      "motif": "Lake Palace · white marble on water",
+      "exportName": "udaipurSkyline"
+    },
+    {
+      "name": "Amritsar",
+      "dot": "#D9A53E",
+      "motif": "Golden Temple · dome reflected in the Sarovar",
+      "exportName": "amritsarSkyline"
+    },
+    {
+      "name": "Chandigarh",
+      "dot": "#5C8F5C",
+      "motif": "City Beautiful — concrete set in deliberate green",
+      "exportName": "chandigarhSkyline"
+    },
+    {
+      "name": "Mumbai",
+      "dot": "#D9A53E",
+      "motif": "Marine Drive lit at dusk — the city that never sleeps",
+      "exportName": "mumbaiSkyline"
+    },
+    {
+      "name": "Pune",
+      "dot": "#8B5A3C",
+      "motif": "Shaniwar Wada gate · Peshwa teak wadas",
+      "exportName": "puneSkyline"
+    },
+    {
+      "name": "Hyderabad",
+      "dot": "#8B9C8F",
+      "motif": "Charminar — four minarets, one grand arch",
+      "exportName": "hyderabadSkyline"
+    },
+    {
+      "name": "Bengaluru",
+      "dot": "#7A3B36",
+      "motif": "Vidhana Soudha dome · garden-city avenues",
+      "exportName": "bengaluruSkyline"
+    },
+    {
+      "name": "Chennai",
+      "dot": "#C2603F",
+      "motif": "Marina lighthouse · Mylapore gopuram",
+      "exportName": "chennaiSkyline"
+    },
+    {
+      "name": "Madurai",
+      "dot": "#D9456E",
+      "motif": "Meenakshi Temple — one soaring, densely carved tower",
+      "exportName": "maduraiSkyline"
+    },
+    {
+      "name": "Visakhapatnam",
+      "dot": "#3E7E8F",
+      "motif": "Ropeway hills · the beached submarine museum",
+      "exportName": "visakhapatnamSkyline"
+    },
+    {
+      "name": "Kochi",
+      "dot": "#5C8F5C",
+      "motif": "Chinese fishing nets · backwater palms",
+      "exportName": "kochiSkyline"
+    },
+    {
+      "name": "Mysuru",
+      "dot": "#D9A53E",
+      "motif": "Mysore Palace · illuminated domes",
+      "exportName": "mysuruSkyline"
+    },
+    {
+      "name": "Kolkata",
+      "dot": "#5C8FB8",
+      "motif": "Howrah Bridge truss · blue heritage facades",
+      "exportName": "kolkataSkyline"
+    },
+    {
+      "name": "Varanasi",
+      "dot": "#D9A53E",
+      "motif": "Ghats · stepped temple spires on the river",
+      "exportName": "varanasiSkyline"
+    },
+    {
+      "name": "Lucknow",
+      "dot": "#D9A53E",
+      "motif": "Bara Imambara dome · Rumi Darwaza gate",
+      "exportName": "lucknowSkyline"
+    },
+    {
+      "name": "Bhubaneswar",
+      "dot": "#9C7456",
+      "motif": "Kalinga shikhara — the curved beehive tower",
+      "exportName": "bhubaneswarSkyline"
+    },
+    {
+      "name": "Patna",
+      "dot": "#B8714A",
+      "motif": "Golghar — the granary with the spiral stair",
+      "exportName": "patnaSkyline"
+    },
+    {
+      "name": "Guwahati",
+      "dot": "#5C8F5C",
+      "motif": "Kamakhya hill · Brahmaputra tea country",
+      "exportName": "guwahatiSkyline"
+    },
+    {
+      "name": "Panaji",
+      "dot": "#D9A53E",
+      "motif": "Goan baroque · laterite church facade",
+      "exportName": "panajiSkyline"
+    },
+    {
+      "name": "Nagpur",
+      "dot": "#E8E0D0",
+      "motif": "Deekshabhoomi — the great white stupa",
+      "exportName": "nagpurSkyline"
+    }
+  ],
+  "states": [
+    {
+      "name": "Punjab",
+      "dot": "#D4A437",
+      "motif": "Sikh-gold chhatri · mustard-field gold",
+      "exportName": "punjabSkyline"
+    },
+    {
+      "name": "Haryana",
+      "dot": "#B58A5C",
+      "motif": "Brick havelis · agrarian flatlands",
+      "exportName": "haryanaSkyline"
+    },
+    {
+      "name": "Himachal Pradesh",
+      "dot": "#7C8B96",
+      "motif": "Pahadi kath-kuni · deodar ridgeline",
+      "exportName": "himachalPradeshSkyline"
+    },
+    {
+      "name": "Jammu and Kashmir",
+      "dot": "#6FA88A",
+      "motif": "Chinar trees · pitched tin roofs, valley willows",
+      "exportName": "jammuAndKashmirSkyline"
+    },
+    {
+      "name": "Rajasthan",
+      "dot": "#C98B5E",
+      "motif": "Desert haveli · sandstone chhatri",
+      "exportName": "rajasthanSkyline"
+    },
+    {
+      "name": "Gujarat",
+      "dot": "#B8935E",
+      "motif": "Sandstone jali lattice · stepwell geometry",
+      "exportName": "gujaratSkyline"
+    },
+    {
+      "name": "Maharashtra",
+      "dot": "#8B5A3C",
+      "motif": "Wada timber courtyards",
+      "exportName": "maharashtraSkyline"
+    },
+    {
+      "name": "Tamil Nadu",
+      "dot": "#C2603F",
+      "motif": "Stepped gopuram · temple-town stripes",
+      "exportName": "tamilNaduSkyline"
+    },
+    {
+      "name": "West Bengal",
+      "dot": "#5C8FB8",
+      "motif": "Heritage blue facades · terracotta temple roof",
+      "exportName": "westBengalSkyline"
+    },
+    {
+      "name": "Karnataka",
+      "dot": "#9C7B4A",
+      "motif": "Laterite temple towns · areca groves",
+      "exportName": "karnatakaSkyline"
+    },
+    {
+      "name": "Kerala",
+      "dot": "#5C8F5C",
+      "motif": "Red-tiled roofs · backwater palms",
+      "exportName": "keralaSkyline"
+    },
+    {
+      "name": "Telangana & Andhra Pradesh",
+      "dot": "#C2603F",
+      "motif": "Deccan plateau · sandstone forts",
+      "exportName": "telanganaAndAndhraPradeshSkyline"
+    },
+    {
+      "name": "Uttar Pradesh",
+      "dot": "#D9A53E",
+      "motif": "Riverside temple spires",
+      "exportName": "uttarPradeshSkyline"
+    },
+    {
+      "name": "Bihar",
+      "dot": "#C2603F",
+      "motif": "River-plain granaries",
+      "exportName": "biharSkyline"
+    },
+    {
+      "name": "Odisha",
+      "dot": "#C2603F",
+      "motif": "Kalinga curved shikhara",
+      "exportName": "odishaSkyline"
+    },
+    {
+      "name": "Assam",
+      "dot": "#5C8F5C",
+      "motif": "Tea-garden hills · Brahmaputra plain",
+      "exportName": "assamSkyline"
+    }
+  ]
+}

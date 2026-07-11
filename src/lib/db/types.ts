@@ -32,6 +32,8 @@ export interface Profile {
   role: UserRole;
   approval_status?: ApprovalStatus;
   operator_status?: OperatorStatus;
+  /** Session 25 — set via accept_operator_agreement() RPC only. */
+  operator_agreement_accepted_at?: string | null;
   /** v6 §6.1 — false = not currently available for co-conductor/transfer target. */
   is_available?: boolean;
   created_at: string;
@@ -99,8 +101,11 @@ export interface Order {
    */
   status: "pending" | "accepted" | "in_transit" | "delivered" | "cancelled";
 
-  /** Corridor key like "Delhi-Chandigarh" */
+  /** Corridor key like "delhi_chandigarh" */
   corridor_key?: string;
+
+  /** Public tracking code, e.g. P262006001DC — set when payment_status = confirmed */
+  tracking_code?: string;
 
   /** Payment must be confirmed before any custody actions */
   payment_status?: PaymentStatus;
@@ -131,6 +136,9 @@ export interface Order {
   recovered_by_trip_id?: string;
 
   blocked_exception?: boolean;
+  lmp_pickup_id?: string | null;
+  linehaul_id?: string | null;
+  lmp_delivery_id?: string | null;
 }
 
 export interface CustodyEvent {
@@ -146,6 +154,11 @@ export interface CustodyEvent {
   uploaded_by?: string;
   uploaded_at?: string;
   mime_type?: string;
+  lat?: number | null;
+  lng?: number | null;
+  location_accuracy_m?: number | null;
+  /** Pickup handoff only — admin visibility (Tier 3). */
+  packaging_condition?: "acceptable" | "risk_acknowledged_by_customer" | null;
   created_at: string;
 }
 
@@ -170,6 +183,7 @@ export interface AppUser {
   role: UserRole | null;
   approval_status?: ApprovalStatus;
   operator_status?: OperatorStatus;
+  operator_agreement_accepted_at?: string | null;
   isAdmin?: boolean;
   isNewUser: boolean;
   /** Held until RoleSelect creates the profile row */

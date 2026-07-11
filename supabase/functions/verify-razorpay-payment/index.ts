@@ -159,6 +159,16 @@ Deno.serve(async (req) => {
       return corsJson({ error: orderErr?.message || "Failed to create parcel" }, { status: 500 });
     }
 
+    const acceptedAt = new Date().toISOString();
+    const { error: termsErr } = await supabase
+      .from("orders")
+      .update({ terms_accepted_at: acceptedAt })
+      .eq("id", order.id);
+
+    if (termsErr) {
+      return corsJson({ error: termsErr.message || "Failed to record terms acceptance" }, { status: 500 });
+    }
+
     await supabase
       .from("payment_sessions")
       .update({ used_at: new Date().toISOString() })

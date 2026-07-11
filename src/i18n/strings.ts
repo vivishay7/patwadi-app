@@ -10,6 +10,17 @@ export const LOCALE_LABELS: Record<AppLocale, string> = {
   gu: "ગુજરાતી",
 };
 
+/** Compact trigger labels for the language dropdown */
+export const LOCALE_SHORT_LABELS: Record<AppLocale, string> = {
+  en: "EN",
+  hi: "हिं",
+  pa: "ਪੰ",
+  ta: "த",
+  te: "తె",
+  mr: "मर",
+  gu: "ગુ",
+};
+
 export const LOCALE_ORDER: AppLocale[] = ["en", "hi", "pa", "ta", "te", "mr", "gu"];
 
 export type TranslationKey =

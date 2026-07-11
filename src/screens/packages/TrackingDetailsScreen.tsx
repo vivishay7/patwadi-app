@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/RootNavigator";
 import { getOrderById } from "../../services/orderService";
@@ -17,11 +17,14 @@ import { Order, CustodyEvent } from "../../lib/db/types";
 import colors from "../../theme/colors";
 import { spacing, radius, typography } from "../../constants";
 import { Ionicons } from "@expo/vector-icons";
-import CustomerParcelTrackerCard from "../../components/CustomerParcelTrackerCard";
 import CustomerTrustStrip from "../../components/CustomerTrustStrip";
+import TrackingWindow from "../../components/TrackingWindow";
 import SupportSheet from "../../components/SupportSheet";
 import { deriveCustomerParcelStatus } from "../../lib/domain/customerParcelStatus";
+import { deriveTrackingCityName } from "../../lib/domain/trackingScenery";
+import { deriveParcelState } from "../../lib/deriveParcelState";
 import { CUSTOMER_SUPPORT_ISSUE_TYPES } from "../../lib/support/supportConfig";
+import { LoadingButton } from "../../components/LoadingButton";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, "TrackingDetails">;
 type RouteProps = RouteProp<RootStackParamList, "TrackingDetails">;
@@ -39,6 +42,12 @@ export default function TrackingDetailsScreen() {
   useEffect(() => {
     loadOrder();
   }, [orderId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOrder();
+    }, [orderId])
+  );
 
   const loadOrder = async () => {
     try {
@@ -62,6 +71,24 @@ export default function TrackingDetailsScreen() {
         orderCreatedAt: order.created_at,
       })
     : null;
+
+  const parcelState = order
+    ? deriveParcelState({ events, blockedException: order.blocked_exception })
+    : null;
+  const hasCustomerToLmpHandoff = events.some(
+    (e) => e.from_role === "customer" && e.to_role === "lmp"
+  );
+  const showPickupCta =
+    parcelState === "created" && !!order?.lmp_pickup_id && !hasCustomerToLmpHandoff;
+
+  const trackingCity = order
+    ? deriveTrackingCityName({
+        parcelState: parcelState ?? "created",
+        pickupLocation: order.pickup_location,
+        dropoffLocation: order.dropoff_location,
+        corridorKey: order.corridor_key,
+      })
+    : "Delhi";
 
   if (loading) {
     return (
@@ -106,15 +133,43 @@ export default function TrackingDetailsScreen() {
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Tracking</Text>
-            <Text style={styles.subtitle}>Order #{order.id.slice(0, 8)}</Text>
+            <Text style={styles.subtitle}>
+              {order.tracking_code ?? `Order #${order.id.slice(0, 8)}`}
+            </Text>
           </View>
         </View>
 
-        <CustomerParcelTrackerCard
-          events={events}
-          blockedException={order.blocked_exception}
-          orderCreatedAt={order.created_at}
-        />
+        {status && status.state !== "blocked_exception" ? (
+          <TrackingWindow
+            cityName={trackingCity}
+            orderId={order.id}
+            trackingCode={order.tracking_code}
+            parcelState={status.state}
+            stageDates={status.stageDates}
+          />
+        ) : status?.state === "blocked_exception" ? (
+          <View style={styles.exceptionCard}>
+            <Ionicons name="alert-circle" size={22} color={colors.error} />
+            <Text style={styles.exceptionText}>{status.label}</Text>
+          </View>
+        ) : null}
+
+        {showPickupCta && (
+          <View style={styles.pickupCtaCard}>
+            <Text style={styles.pickupCtaText}>
+              Your pickup partner is on the way. Tap to confirm pickup.
+            </Text>
+            <LoadingButton
+              title="Confirm pickup"
+              onPress={() =>
+                navigation.navigate("ConfirmHandoff", {
+                  parcelId: order.id,
+                  step: "customer_to_lmp",
+                })
+              }
+            />
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Route</Text>
@@ -272,5 +327,32 @@ const styles = StyleSheet.create({
   },
   trustStrip: {
     marginTop: spacing.sm,
+  },
+  pickupCtaCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  pickupCtaText: {
+    ...typography.body,
+    color: colors.white,
+    textAlign: "center",
+  },
+  exceptionCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  exceptionText: {
+    ...typography.body,
+    color: colors.error,
+    flex: 1,
+    fontWeight: "600",
   },
 });

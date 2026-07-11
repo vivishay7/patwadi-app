@@ -88,6 +88,7 @@ export default {
       mapboxToken: process.env.EXPO_PUBLIC_MAPBOX_TOKEN,
       razorpayKeyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID,
       supportWhatsapp: process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP,
+      pilotBuild: process.env.EXPO_PUBLIC_PILOT_BUILD === "true",
       privacyPolicyUrl: "https://patwadi.com/docs/privacy-policy",
     },
   },

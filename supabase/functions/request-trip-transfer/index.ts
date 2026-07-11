@@ -39,6 +39,18 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { data: actorProfile } = await supabase
+      .from("profiles")
+      .select("role, operator_agreement_accepted_at")
+      .eq("id", user.id)
+      .single();
+    if (
+      (actorProfile?.role === "lmp" || actorProfile?.role === "linehaul") &&
+      !actorProfile?.operator_agreement_accepted_at
+    ) {
+      return corsJson({ error: "Agreement not accepted." }, { status: 403 });
+    }
+
     const rateLimit = await checkRateLimit(
       supabase,
       `request-trip-transfer:user:${user.id}`,

@@ -41,9 +41,9 @@ export async function checkRateLimit(
   return { allowed: true };
 }
 
-export function rateLimitResponse(retryAfterSec: number): Response {
+export function rateLimitResponse(retryAfterSec: number, req?: Request): Response {
   return corsJson(
     { error: "Rate limit exceeded", retryAfterSec },
-    { status: 429 }
+    { status: 429, req }
   );
 }

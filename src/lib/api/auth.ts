@@ -58,6 +58,7 @@ export function buildAppUser(params: {
     role: profile?.role || null,
     approval_status: profile?.approval_status,
     operator_status: profile?.operator_status,
+    operator_agreement_accepted_at: profile?.operator_agreement_accepted_at ?? null,
     isAdmin: !!isAdmin,
     isNewUser: !profile,
   };
