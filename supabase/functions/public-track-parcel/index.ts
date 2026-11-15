@@ -7,7 +7,6 @@ import { checkRateLimit, rateLimitResponse } from "../_shared/rateLimit.ts";
 import {
   deriveCustomerParcelStatus,
   deriveTrackingCityName,
-  getDeliveryProofPath,
   isValidTrackingCode,
   normalizeTrackingCode,
   parseCorridorCities,
@@ -17,7 +16,6 @@ import {
 
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const POD_SIGNED_URL_TTL_SEC = 3600;
 const NOT_FOUND_MESSAGE = "Tracking code not found";
 
 function getRequired(name: string): string {
@@ -129,19 +127,6 @@ Deno.serve(async (req) => {
     const corridorCities = parseCorridorCities(order.corridor_key);
     const scene = resolveSceneMotif(trackingCity);
 
-    let podUrl: string | null = null;
-    const proofPath = getDeliveryProofPath(custodyEvents);
-    if (proofPath && status.state === "delivered") {
-      const { data: signed, error: signErr } = await supabase.storage
-        .from("custody-proofs")
-        .createSignedUrl(proofPath, POD_SIGNED_URL_TTL_SEC);
-      if (signErr) {
-        console.error("public-track-parcel pod signed url:", signErr);
-      } else {
-        podUrl = signed?.signedUrl ?? null;
-      }
-    }
-
     return corsJson(
       {
         tracking_code: order.tracking_code,
@@ -163,7 +148,6 @@ Deno.serve(async (req) => {
           order.blocked_exception === true
             ? "Delivery exception — our team is resolving it"
             : null,
-        pod_url: podUrl,
       },
       { req }
     );

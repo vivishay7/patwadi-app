@@ -33,7 +33,7 @@ export const TRACKER_STAGE_ORDER: SimplifiedParcelState[] = [
   "delivered",
 ];
 
-const TRACKING_CODE_RE = /^P\d{9}[A-Z]{2}$/;
+const TRACKING_CODE_RE = /^P[A-F0-9]{12}$/;
 
 const CITY_SLUG_TO_NAME: Record<string, string> = {
   delhi: "Delhi",

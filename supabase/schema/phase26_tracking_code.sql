@@ -1,7 +1,8 @@
 -- ============================================
--- PATWADI Phase 26 — Public parcel tracking code
+-- PATWADI Phase 26 — Public parcel tracking code (legacy deterministic format)
 -- Format: P + YY + DD + MM + NNN + OO
 -- Example: P262006001DC = 2026-06-20, parcel #001, Delhi→Chandigarh (D+C)
+-- Superseded by phase29_public_tracking_entropy.sql for unauthenticated lookup.
 -- Run AFTER phase25_operator_agreement.sql
 -- ============================================
 
