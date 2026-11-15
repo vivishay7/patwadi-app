@@ -26,6 +26,21 @@ function random4(): string {
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
+async function operatorAgreementAccepted(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<boolean> {
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("role, operator_agreement_accepted_at")
+    .eq("id", userId)
+    .single();
+
+  if (error || !profile) return false;
+  if (profile.role !== "lmp" && profile.role !== "linehaul") return true;
+  return !!profile.operator_agreement_accepted_at;
+}
+
 Deno.serve(async (req) => {
   const preflight = handleCorsPreflight(req);
   if (preflight) return preflight;
@@ -48,6 +63,10 @@ Deno.serve(async (req) => {
       error: userError,
     } = await authed.auth.getUser();
     if (userError || !user) return corsJson({ error: "Unauthorized" }, { status: 401 });
+
+    if (!(await operatorAgreementAccepted(supabase, user.id))) {
+      return corsJson({ error: "Agreement not accepted." }, { status: 403 });
+    }
 
     const body = await req.json();
     const parcelId: string = body.parcelId;

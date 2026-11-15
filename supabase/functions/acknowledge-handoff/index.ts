@@ -45,6 +45,21 @@ const PACKAGING_CONDITIONS: PackagingCondition[] = [
   "risk_acknowledged_by_customer",
 ];
 
+async function operatorAgreementAccepted(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<boolean> {
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("role, operator_agreement_accepted_at")
+    .eq("id", userId)
+    .single();
+
+  if (error || !profile) return false;
+  if (profile.role !== "lmp" && profile.role !== "linehaul") return true;
+  return !!profile.operator_agreement_accepted_at;
+}
+
 function isValidPhotoPath(parcelId: string, step: Step, photoPath: string): boolean {
   if (!PHOTO_PATH_RE.test(photoPath)) return false;
   const [pathParcelId, pathStep] = photoPath.split("/");
@@ -130,6 +145,10 @@ Deno.serve(async (req) => {
     } = await authed.auth.getUser();
     if (userError || !user) {
       return corsJson({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!(await operatorAgreementAccepted(supabase, user.id))) {
+      return corsJson({ error: "Agreement not accepted." }, { status: 403 });
     }
 
     const body = await req.json();
