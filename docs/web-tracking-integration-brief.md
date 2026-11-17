@@ -272,9 +272,9 @@ GET /functions/v1/public-track-parcel?code=P262006001DC
 }
 ```
 
-Omitted from response: `customer_id`, operator IDs, Razorpay IDs, `trip_id`, full pickup/dropoff addresses, phone, email, pricing.
+Omitted from response: `customer_id`, operator IDs, Razorpay IDs, `trip_id`, full pickup/dropoff addresses, phone, email, pricing, proof-of-delivery photo URLs.
 
-At `delivered`, `pod_url` is a short-lived signed URL to the custody POD photo (1 h TTL) when available.
+At `delivered`, `pod_url` remains `null` on the public unauthenticated endpoint. Proof-of-delivery photos require an authenticated in-app or support flow.
 
 #### Errors
 

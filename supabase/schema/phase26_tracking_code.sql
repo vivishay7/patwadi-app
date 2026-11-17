@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS tracking_code_daily_seq (
   last_seq INTEGER NOT NULL DEFAULT 0
 );
 
+ALTER TABLE tracking_code_daily_seq ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE tracking_code_daily_seq FROM PUBLIC, anon, authenticated;
+
 -- First letter of origin + first letter of destination from corridor_key slug
 CREATE OR REPLACE FUNCTION corridor_city_initials(p_corridor_key TEXT)
 RETURNS TEXT
