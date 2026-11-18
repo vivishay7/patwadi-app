@@ -30,6 +30,35 @@ async function hmacSha256(key: string, data: string): Promise<string> {
     .join("");
 }
 
+async function findExistingVerifiedOrderId(
+  supabase: ReturnType<typeof createClient>,
+  razorpayOrderId: string,
+  razorpayPaymentId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("razorpay_order_id", razorpayOrderId)
+    .eq("razorpay_payment_id", razorpayPaymentId)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
+async function markPaymentSessionUsed(
+  supabase: ReturnType<typeof createClient>,
+  paymentSessionId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("payment_sessions")
+    .update({ used_at: new Date().toISOString() })
+    .eq("id", paymentSessionId)
+    .is("used_at", null);
+
+  if (error) {
+    console.error("mark payment session used:", error);
+  }
+}
+
 Deno.serve(async (req) => {
   const preflight = handleCorsPreflight(req);
   if (preflight) return preflight;
@@ -86,13 +115,12 @@ Deno.serve(async (req) => {
     }
     if (session.used_at) {
       // Idempotency: already used; find the parcel by payment IDs
-      const { data: existing } = await supabase
-        .from("orders")
-        .select("id")
-        .eq("razorpay_order_id", razorpay_order_id)
-        .eq("razorpay_payment_id", razorpay_payment_id)
-        .maybeSingle();
-      if (existing?.id) return corsJson({ ok: true, parcelId: existing.id });
+      const existingId = await findExistingVerifiedOrderId(
+        supabase,
+        razorpay_order_id,
+        razorpay_payment_id
+      );
+      if (existingId) return corsJson({ ok: true, parcelId: existingId });
       return corsJson({ error: "Payment session already used" }, { status: 409 });
     }
 
@@ -134,6 +162,8 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Payment not completed" }, { status: 402 });
     }
 
+    const acceptedAt = new Date().toISOString();
+
     // Create parcel/order AFTER verification
     const { data: order, error: orderErr } = await supabase
       .from("orders")
@@ -149,6 +179,7 @@ Deno.serve(async (req) => {
         payment_status: "confirmed",
         razorpay_order_id,
         razorpay_payment_id,
+        terms_accepted_at: acceptedAt,
         // legacy status retained but not used as truth
         status: "pending",
       })
@@ -156,23 +187,21 @@ Deno.serve(async (req) => {
       .single();
 
     if (orderErr || !order) {
+      if (orderErr?.code === "23505") {
+        const existingId = await findExistingVerifiedOrderId(
+          supabase,
+          razorpay_order_id,
+          razorpay_payment_id
+        );
+        if (existingId) {
+          await markPaymentSessionUsed(supabase, session.id);
+          return corsJson({ ok: true, parcelId: existingId });
+        }
+      }
       return corsJson({ error: orderErr?.message || "Failed to create parcel" }, { status: 500 });
     }
 
-    const acceptedAt = new Date().toISOString();
-    const { error: termsErr } = await supabase
-      .from("orders")
-      .update({ terms_accepted_at: acceptedAt })
-      .eq("id", order.id);
-
-    if (termsErr) {
-      return corsJson({ error: termsErr.message || "Failed to record terms acceptance" }, { status: 500 });
-    }
-
-    await supabase
-      .from("payment_sessions")
-      .update({ used_at: new Date().toISOString() })
-      .eq("id", session.id);
+    await markPaymentSessionUsed(supabase, session.id);
 
     return corsJson({ ok: true, parcelId: order.id });
   } catch (e) {
