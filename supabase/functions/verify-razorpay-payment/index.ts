@@ -30,6 +30,10 @@ async function hmacSha256(key: string, data: string): Promise<string> {
     .join("");
 }
 
+function isUniqueViolation(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "23505";
+}
+
 Deno.serve(async (req) => {
   const preflight = handleCorsPreflight(req);
   if (preflight) return preflight;
@@ -134,7 +138,27 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Payment not completed" }, { status: 402 });
     }
 
-    // Create parcel/order AFTER verification
+    const finalizeVerifiedOrder = async (parcelId: string): Promise<Response | null> => {
+      const acceptedAt = new Date().toISOString();
+      const { error: termsErr } = await supabase
+        .from("orders")
+        .update({ terms_accepted_at: acceptedAt })
+        .eq("id", parcelId);
+
+      if (termsErr) {
+        return corsJson({ error: termsErr.message || "Failed to record terms acceptance" }, { status: 500 });
+      }
+
+      await supabase
+        .from("payment_sessions")
+        .update({ used_at: new Date().toISOString() })
+        .eq("id", session.id);
+
+      return null;
+    };
+
+    // Create parcel/order AFTER verification. Unique DB indexes make concurrent
+    // retries idempotent instead of creating multiple parcels for one payment.
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
@@ -156,23 +180,26 @@ Deno.serve(async (req) => {
       .single();
 
     if (orderErr || !order) {
+      if (isUniqueViolation(orderErr)) {
+        const { data: existing, error: existingErr } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("razorpay_order_id", razorpay_order_id)
+          .eq("razorpay_payment_id", razorpay_payment_id)
+          .maybeSingle();
+
+        if (!existingErr && existing?.id) {
+          const finalizeError = await finalizeVerifiedOrder(existing.id);
+          if (finalizeError) return finalizeError;
+          return corsJson({ ok: true, parcelId: existing.id });
+        }
+      }
+
       return corsJson({ error: orderErr?.message || "Failed to create parcel" }, { status: 500 });
     }
 
-    const acceptedAt = new Date().toISOString();
-    const { error: termsErr } = await supabase
-      .from("orders")
-      .update({ terms_accepted_at: acceptedAt })
-      .eq("id", order.id);
-
-    if (termsErr) {
-      return corsJson({ error: termsErr.message || "Failed to record terms acceptance" }, { status: 500 });
-    }
-
-    await supabase
-      .from("payment_sessions")
-      .update({ used_at: new Date().toISOString() })
-      .eq("id", session.id);
+    const finalizeError = await finalizeVerifiedOrder(order.id);
+    if (finalizeError) return finalizeError;
 
     return corsJson({ ok: true, parcelId: order.id });
   } catch (e) {
