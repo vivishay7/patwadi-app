@@ -33,7 +33,9 @@ export const TRACKER_STAGE_ORDER: SimplifiedParcelState[] = [
   "delivered",
 ];
 
-const TRACKING_CODE_RE = /^P\d{9}[A-Z]{2}$/;
+// Accept both new opaque codes and legacy date/sequence codes already printed
+// on labels before Phase 26 was hardened.
+const TRACKING_CODE_RE = /^P(?:[0-9A-HJKMNP-TV-Z]{12}|\d{9}[A-Z]{2})$/;
 
 const CITY_SLUG_TO_NAME: Record<string, string> = {
   delhi: "Delhi",

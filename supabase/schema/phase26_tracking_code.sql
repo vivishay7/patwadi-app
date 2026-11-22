@@ -1,9 +1,11 @@
 -- ============================================
 -- PATWADI Phase 26 — Public parcel tracking code
--- Format: P + YY + DD + MM + NNN + OO
--- Example: P262006001DC = 2026-06-20, parcel #001, Delhi→Chandigarh (D+C)
+-- Format: P + 12 uppercase base32 characters (opaque, non-enumerable)
+-- Example: P8M4K2J7Q9TXR
 -- Run AFTER phase25_operator_agreement.sql
 -- ============================================
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS tracking_code TEXT;
@@ -12,7 +14,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_tracking_code
   ON orders (tracking_code)
   WHERE tracking_code IS NOT NULL;
 
--- Daily sequence for the NNN segment (Asia/Kolkata calendar day)
+-- Legacy deterministic codes used this sequence table. Keep it so rerunning this
+-- migration is non-destructive for environments that already created it, but new
+-- codes are generated from cryptographic randomness below.
 CREATE TABLE IF NOT EXISTS tracking_code_daily_seq (
   seq_date DATE PRIMARY KEY,
   last_seq INTEGER NOT NULL DEFAULT 0
@@ -62,6 +66,28 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION random_tracking_token(p_length INTEGER DEFAULT 12)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  alphabet CONSTANT TEXT := '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  token TEXT := '';
+  byte_value INTEGER;
+BEGIN
+  IF p_length < 1 THEN
+    RAISE EXCEPTION 'TRACKING_TOKEN_LENGTH_INVALID';
+  END IF;
+
+  WHILE length(token) < p_length LOOP
+    byte_value := get_byte(gen_random_bytes(1), 0);
+    token := token || substr(alphabet, (byte_value % length(alphabet)) + 1, 1);
+  END LOOP;
+
+  RETURN token;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION generate_tracking_code(
   p_created_at TIMESTAMPTZ,
   p_corridor_key TEXT
@@ -70,21 +96,20 @@ RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_local_ts TIMESTAMPTZ;
-  v_date DATE;
-  v_seq INTEGER;
+  v_code TEXT;
+  v_attempt INTEGER;
 BEGIN
-  v_local_ts := COALESCE(p_created_at, NOW()) AT TIME ZONE 'Asia/Kolkata';
-  v_date := v_local_ts::DATE;
-  v_seq := next_tracking_code_seq(v_date);
+  -- p_created_at and p_corridor_key are kept for trigger/backfill compatibility.
+  -- Do not encode date, sequence, or corridor in public codes: the tracking
+  -- endpoint is unauthenticated, so lookup keys must be unguessable.
+  FOR v_attempt IN 1..8 LOOP
+    v_code := 'P' || random_tracking_token(12);
+    IF NOT EXISTS (SELECT 1 FROM orders WHERE tracking_code = v_code) THEN
+      RETURN v_code;
+    END IF;
+  END LOOP;
 
-  RETURN
-    'P'
-    || to_char(v_local_ts, 'YY')
-    || to_char(v_local_ts, 'DD')
-    || to_char(v_local_ts, 'MM')
-    || lpad(v_seq::TEXT, 3, '0')
-    || corridor_city_initials(p_corridor_key);
+  RAISE EXCEPTION 'TRACKING_CODE_GENERATION_COLLISION';
 END;
 $$;
 
@@ -130,3 +155,7 @@ $$;
 
 REVOKE ALL ON FUNCTION next_tracking_code_seq FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION next_tracking_code_seq TO service_role;
+REVOKE ALL ON FUNCTION random_tracking_token(INTEGER) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION random_tracking_token(INTEGER) TO service_role;
+REVOKE ALL ON FUNCTION generate_tracking_code(TIMESTAMPTZ, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION generate_tracking_code(TIMESTAMPTZ, TEXT) TO service_role;

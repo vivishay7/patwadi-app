@@ -181,7 +181,7 @@ export default function MyPackagesScreen() {
     <View style={styles.trackingSection}>
       <Text style={styles.trackingTitle}>Track a Package</Text>
       <Text style={styles.trackingSubtitle}>
-        Enter your tracking code (e.g. P262006001DC) or order ID
+        Enter your tracking code (e.g. P8M4K2J7Q9TXR) or order ID
       </Text>
       <View style={styles.trackingInputContainer}>
         <TextInput

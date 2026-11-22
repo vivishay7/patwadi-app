@@ -146,7 +146,7 @@ export async function resolveOrderLookup(input: string): Promise<Order | null> {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  if (/^P\d{9}[A-Z]{2}$/i.test(trimmed)) {
+  if (/^P(?:[0-9A-HJKMNP-TV-Z]{12}|\d{9}[A-Z]{2})$/i.test(trimmed)) {
     return getOrderByTrackingCode(trimmed);
   }
 
