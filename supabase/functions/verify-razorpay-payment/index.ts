@@ -134,47 +134,24 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Payment not completed" }, { status: 402 });
     }
 
-    // Create parcel/order AFTER verification
-    const { data: order, error: orderErr } = await supabase
-      .from("orders")
-      .insert({
-        customer_id: user.id,
-        pickup_location: session.pickup_location,
-        dropoff_location: session.dropoff_location,
-        weight_kg: session.weight_kg,
-        dimensions: session.dimensions,
-        contents: session.contents,
-        price_estimate: session.price_estimate,
-        corridor_key: session.corridor_key,
-        payment_status: "confirmed",
-        razorpay_order_id,
-        razorpay_payment_id,
-        // legacy status retained but not used as truth
-        status: "pending",
-      })
-      .select("id")
-      .single();
+    const { data: completion, error: completionErr } = await supabase.rpc(
+      "complete_verified_payment_session",
+      {
+        p_session_id: session.id,
+        p_user_id: user.id,
+        p_razorpay_order_id: razorpay_order_id,
+        p_razorpay_payment_id: razorpay_payment_id,
+      }
+    );
 
-    if (orderErr || !order) {
-      return corsJson({ error: orderErr?.message || "Failed to create parcel" }, { status: 500 });
+    if (completionErr || !completion?.parcelId) {
+      return corsJson(
+        { error: completionErr?.message || "Failed to complete payment session" },
+        { status: 500 }
+      );
     }
 
-    const acceptedAt = new Date().toISOString();
-    const { error: termsErr } = await supabase
-      .from("orders")
-      .update({ terms_accepted_at: acceptedAt })
-      .eq("id", order.id);
-
-    if (termsErr) {
-      return corsJson({ error: termsErr.message || "Failed to record terms acceptance" }, { status: 500 });
-    }
-
-    await supabase
-      .from("payment_sessions")
-      .update({ used_at: new Date().toISOString() })
-      .eq("id", session.id);
-
-    return corsJson({ ok: true, parcelId: order.id });
+    return corsJson({ ok: true, parcelId: completion.parcelId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return corsJson({ error: msg }, { status: 500 });
