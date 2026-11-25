@@ -8,11 +8,27 @@ import { checkRateLimit, rateLimitResponse } from "../_shared/rateLimit.ts";
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const AMOUNT_TOLERANCE_PAISE = 100;
+const UNIQUE_VIOLATION_CODE = "23505";
 
 function getRequired(name: string): string {
   const v = Deno.env.get(name);
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
+}
+
+async function findExistingOrder(
+  supabase: ReturnType<typeof createClient>,
+  razorpay_order_id: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("razorpay_order_id", razorpay_order_id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return data?.id ?? null;
 }
 
 async function hmacSha256(key: string, data: string): Promise<string> {
@@ -85,14 +101,9 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Forbidden" }, { status: 403 });
     }
     if (session.used_at) {
-      // Idempotency: already used; find the parcel by payment IDs
-      const { data: existing } = await supabase
-        .from("orders")
-        .select("id")
-        .eq("razorpay_order_id", razorpay_order_id)
-        .eq("razorpay_payment_id", razorpay_payment_id)
-        .maybeSingle();
-      if (existing?.id) return corsJson({ ok: true, parcelId: existing.id });
+      // Idempotency: already used; find the parcel created for this Razorpay order.
+      const existingId = await findExistingOrder(supabase, razorpay_order_id);
+      if (existingId) return corsJson({ ok: true, parcelId: existingId });
       return corsJson({ error: "Payment session already used" }, { status: 409 });
     }
 
@@ -154,6 +165,18 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
+
+    if (orderErr?.code === UNIQUE_VIOLATION_CODE) {
+      const existingId = await findExistingOrder(supabase, razorpay_order_id);
+      if (existingId) {
+        await supabase
+          .from("payment_sessions")
+          .update({ used_at: new Date().toISOString() })
+          .eq("id", session.id)
+          .is("used_at", null);
+        return corsJson({ ok: true, parcelId: existingId });
+      }
+    }
 
     if (orderErr || !order) {
       return corsJson({ error: orderErr?.message || "Failed to create parcel" }, { status: 500 });
