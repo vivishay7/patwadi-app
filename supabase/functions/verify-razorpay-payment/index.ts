@@ -9,6 +9,33 @@ const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const AMOUNT_TOLERANCE_PAISE = 100;
 
+async function findExistingOrder(
+  supabase: ReturnType<typeof createClient>,
+  razorpay_order_id: string,
+  razorpay_payment_id: string
+): Promise<string | null> {
+  const { data: existingByPayment } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("razorpay_order_id", razorpay_order_id)
+    .eq("razorpay_payment_id", razorpay_payment_id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingByPayment?.id) return existingByPayment.id as string;
+
+  const { data: existingByOrder } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("razorpay_order_id", razorpay_order_id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return existingByOrder?.id ? (existingByOrder.id as string) : null;
+}
+
 function getRequired(name: string): string {
   const v = Deno.env.get(name);
   if (!v) throw new Error(`Missing env: ${name}`);
@@ -86,13 +113,8 @@ Deno.serve(async (req) => {
     }
     if (session.used_at) {
       // Idempotency: already used; find the parcel by payment IDs
-      const { data: existing } = await supabase
-        .from("orders")
-        .select("id")
-        .eq("razorpay_order_id", razorpay_order_id)
-        .eq("razorpay_payment_id", razorpay_payment_id)
-        .maybeSingle();
-      if (existing?.id) return corsJson({ ok: true, parcelId: existing.id });
+      const existingId = await findExistingOrder(supabase, razorpay_order_id, razorpay_payment_id);
+      if (existingId) return corsJson({ ok: true, parcelId: existingId });
       return corsJson({ error: "Payment session already used" }, { status: 409 });
     }
 
@@ -134,6 +156,18 @@ Deno.serve(async (req) => {
       return corsJson({ error: "Payment not completed" }, { status: 402 });
     }
 
+    const existingId = await findExistingOrder(supabase, razorpay_order_id, razorpay_payment_id);
+    if (existingId) {
+      await supabase
+        .from("payment_sessions")
+        .update({ used_at: new Date().toISOString() })
+        .eq("id", session.id)
+        .is("used_at", null);
+      return corsJson({ ok: true, parcelId: existingId });
+    }
+
+    const acceptedAt = new Date().toISOString();
+
     // Create parcel/order AFTER verification
     const { data: order, error: orderErr } = await supabase
       .from("orders")
@@ -149,6 +183,7 @@ Deno.serve(async (req) => {
         payment_status: "confirmed",
         razorpay_order_id,
         razorpay_payment_id,
+        terms_accepted_at: acceptedAt,
         // legacy status retained but not used as truth
         status: "pending",
       })
@@ -156,23 +191,27 @@ Deno.serve(async (req) => {
       .single();
 
     if (orderErr || !order) {
+      const existingIdAfterConflict = await findExistingOrder(supabase, razorpay_order_id, razorpay_payment_id);
+      if (existingIdAfterConflict) {
+        await supabase
+          .from("payment_sessions")
+          .update({ used_at: new Date().toISOString() })
+          .eq("id", session.id)
+          .is("used_at", null);
+        return corsJson({ ok: true, parcelId: existingIdAfterConflict });
+      }
       return corsJson({ error: orderErr?.message || "Failed to create parcel" }, { status: 500 });
     }
 
-    const acceptedAt = new Date().toISOString();
-    const { error: termsErr } = await supabase
-      .from("orders")
-      .update({ terms_accepted_at: acceptedAt })
-      .eq("id", order.id);
-
-    if (termsErr) {
-      return corsJson({ error: termsErr.message || "Failed to record terms acceptance" }, { status: 500 });
-    }
-
-    await supabase
+    const { error: markUsedErr } = await supabase
       .from("payment_sessions")
       .update({ used_at: new Date().toISOString() })
-      .eq("id", session.id);
+      .eq("id", session.id)
+      .is("used_at", null);
+
+    if (markUsedErr) {
+      console.error("Failed to mark payment session used", markUsedErr);
+    }
 
     return corsJson({ ok: true, parcelId: order.id });
   } catch (e) {
