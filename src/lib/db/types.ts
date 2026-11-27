@@ -104,7 +104,7 @@ export interface Order {
   /** Corridor key like "delhi_chandigarh" */
   corridor_key?: string;
 
-  /** Public tracking code, e.g. P262006001DC — set when payment_status = confirmed */
+  /** Public tracking code, e.g. P8F3A91C02D7B4E6F — set when payment_status = confirmed */
   tracking_code?: string;
 
   /** Payment must be confirmed before any custody actions */

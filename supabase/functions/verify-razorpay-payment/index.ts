@@ -156,6 +156,20 @@ Deno.serve(async (req) => {
       .single();
 
     if (orderErr || !order) {
+      if (orderErr?.code === "23505" || /duplicate key/i.test(orderErr?.message || "")) {
+        const { data: existing } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("razorpay_order_id", razorpay_order_id)
+          .maybeSingle();
+        if (existing?.id) {
+          await supabase
+            .from("payment_sessions")
+            .update({ used_at: new Date().toISOString() })
+            .eq("id", session.id);
+          return corsJson({ ok: true, parcelId: existing.id });
+        }
+      }
       return corsJson({ error: orderErr?.message || "Failed to create parcel" }, { status: 500 });
     }
 

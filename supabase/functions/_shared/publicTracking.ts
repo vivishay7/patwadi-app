@@ -33,7 +33,8 @@ export const TRACKER_STAGE_ORDER: SimplifiedParcelState[] = [
   "delivered",
 ];
 
-const TRACKING_CODE_RE = /^P\d{9}[A-Z]{2}$/;
+const CURRENT_TRACKING_CODE_RE = /^P[0-9A-F]{16}$/;
+const LEGACY_TRACKING_CODE_RE = /^P\d{9}[A-Z]{2}$/;
 
 const CITY_SLUG_TO_NAME: Record<string, string> = {
   delhi: "Delhi",
@@ -165,7 +166,7 @@ export function normalizeTrackingCode(raw: string): string {
 }
 
 export function isValidTrackingCode(code: string): boolean {
-  return TRACKING_CODE_RE.test(code);
+  return CURRENT_TRACKING_CODE_RE.test(code) || LEGACY_TRACKING_CODE_RE.test(code);
 }
 
 function titleCaseSlug(slug: string): string {

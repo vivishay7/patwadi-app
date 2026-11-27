@@ -141,12 +141,14 @@ export async function getOrderByTrackingCode(code: string): Promise<Order | null
   return data;
 }
 
+const TRACKING_CODE_RE = /^P(?:[0-9A-F]{16}|\d{9}[A-Z]{2})$/i;
+
 /** UUID or public tracking code — for in-app track field. */
 export async function resolveOrderLookup(input: string): Promise<Order | null> {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
-  if (/^P\d{9}[A-Z]{2}$/i.test(trimmed)) {
+  if (TRACKING_CODE_RE.test(trimmed)) {
     return getOrderByTrackingCode(trimmed);
   }
 

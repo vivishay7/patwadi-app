@@ -45,6 +45,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_lmp_pickup_id ON orders(lmp_pickup_id);
 CREATE INDEX IF NOT EXISTS idx_orders_linehaul_id ON orders(linehaul_id);
 CREATE INDEX IF NOT EXISTS idx_orders_lmp_delivery_id ON orders(lmp_delivery_id);
 CREATE INDEX IF NOT EXISTS idx_orders_blocked_exception ON orders(blocked_exception);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_razorpay_order_id_unique
+  ON orders(razorpay_order_id)
+  WHERE razorpay_order_id IS NOT NULL;
 
 -- ============================================
 -- 2b) Payment sessions (order created only after verification)
