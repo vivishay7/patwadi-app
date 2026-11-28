@@ -4,6 +4,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsJson, handleCorsPreflight } from "../_shared/cors.ts";
 import { checkRateLimit, rateLimitResponse } from "../_shared/rateLimit.ts";
+import { deriveBookingPriceFromDb } from "../_shared/pricing.ts";
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
@@ -50,17 +51,34 @@ Deno.serve(async (req) => {
     const weight_kg: number | undefined = body.weight_kg;
     const dimensions: any | undefined = body.dimensions;
     const contents: string | undefined = body.contents;
-    const price_estimate: number | undefined = body.price_estimate;
 
     if (!corridorKey || !pickup_location || !dropoff_location) {
       return corsJson({ error: "Missing required booking/payment fields" }, { status: 400 });
     }
 
-    // payment_sessions row is created below — amount must not trust client amountInPaise.
-    if (price_estimate == null || Number.isNaN(Number(price_estimate))) {
-      return corsJson({ error: "Missing price_estimate" }, { status: 400 });
+    // Amounts are authoritative here: never trust client-provided totals or estimates.
+    const pricingInput = {
+      corridorKey,
+      pickup_location,
+      dropoff_location,
+      pickup_city: body.pickup_city,
+      pickup_state: body.pickup_state,
+      pickup_place_name: body.pickup_place_name,
+      dropoff_city: body.dropoff_city,
+      dropoff_state: body.dropoff_state,
+      dropoff_place_name: body.dropoff_place_name,
+      needs_packaging: Boolean(body.needs_packaging),
+      packaging_type: body.packaging_type ?? null,
+      priority: body.priority ?? null,
+    };
+    let pricing;
+    try {
+      pricing = await deriveBookingPriceFromDb(supabase, pricingInput);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid booking pricing";
+      return corsJson({ error: message }, { status: 400 });
     }
-    const amountInPaise = Math.round(Number(price_estimate) * 100);
+    const amountInPaise = pricing.amountInPaise;
     if (amountInPaise < 100) {
       return corsJson({ error: "Amount below minimum" }, { status: 400 });
     }
@@ -111,7 +129,7 @@ Deno.serve(async (req) => {
         weight_kg: weight_kg ?? null,
         dimensions: dimensions ?? null,
         contents: contents ?? null,
-        price_estimate: price_estimate ?? null,
+        price_estimate: pricing.priceEstimate,
       })
       .select("id")
       .single();
@@ -120,7 +138,12 @@ Deno.serve(async (req) => {
       return corsJson({ error: sessionErr?.message || "Failed to create payment session" }, { status: 500 });
     }
 
-    return corsJson({ razorpayOrderId, paymentSessionId: session.id });
+    return corsJson({
+      razorpayOrderId,
+      paymentSessionId: session.id,
+      amountInPaise,
+      priceEstimate: pricing.priceEstimate,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return corsJson({ error: msg }, { status: 500 });

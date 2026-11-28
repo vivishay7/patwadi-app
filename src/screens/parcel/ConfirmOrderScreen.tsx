@@ -158,10 +158,19 @@ export default function ConfirmOrderScreen() {
         corridorKey,
         pickup_location: pickup.address,
         dropoff_location: dropoff.address,
+        pickup_city: pickup.city,
+        pickup_state: pickup.state,
+        pickup_place_name: pickup.placeName,
+        dropoff_city: dropoff.city,
+        dropoff_state: dropoff.state,
+        dropoff_place_name: dropoff.placeName,
         weight_kg: weight ? Number(weight) : undefined,
         dimensions: dimensions || undefined,
         contents: contents || undefined,
         price_estimate: priceEstimate || undefined,
+        needs_packaging: Boolean(packageInfo?.needsPackaging),
+        packaging_type: packageInfo?.packagingType || null,
+        priority: packageInfo?.priority || null,
       });
       if ("error" in rpOrder) {
         Alert.alert("Payment error", rpOrder.error);
@@ -170,7 +179,7 @@ export default function ConfirmOrderScreen() {
 
       const checkout = await openRazorpayCheckout({
         keyId: razorpayKeyId,
-        amountInPaise,
+        amountInPaise: rpOrder.amountInPaise,
         name: "Patwadi",
         description: `Patwadi parcel (${corridorKey})`,
         orderId: rpOrder.razorpayOrderId,

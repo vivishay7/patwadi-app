@@ -7,11 +7,20 @@ export async function createRazorpayOrder(params: {
   corridorKey: string;
   pickup_location: string;
   dropoff_location: string;
+  pickup_city?: string;
+  pickup_state?: string;
+  pickup_place_name?: string;
+  dropoff_city?: string;
+  dropoff_state?: string;
+  dropoff_place_name?: string;
   weight_kg?: number;
   dimensions?: { length: number; width: number; height: number };
   contents?: string;
   price_estimate?: number;
-}): Promise<{ razorpayOrderId: string } | { error: string }> {
+  needs_packaging?: boolean;
+  packaging_type?: "mailer" | "box-small" | "box-medium" | "box-large" | null;
+  priority?: "24hrs" | "48hrs" | null;
+}): Promise<{ razorpayOrderId: string; amountInPaise: number; priceEstimate: number } | { error: string }> {
   const { amountInPaise, currency = "INR" } = params;
   const { data, error } = await supabase.functions.invoke("create-razorpay-order", {
     body: { ...params, amountInPaise, currency },
@@ -19,7 +28,12 @@ export async function createRazorpayOrder(params: {
 
   if (error) return { error: error.message };
   if (!data?.razorpayOrderId) return { error: data?.error || "Failed to create payment order" };
-  return { razorpayOrderId: data.razorpayOrderId as string };
+  if (!data?.amountInPaise) return { error: "Payment order missing server amount" };
+  return {
+    razorpayOrderId: data.razorpayOrderId as string,
+    amountInPaise: Number(data.amountInPaise),
+    priceEstimate: Number(data.priceEstimate),
+  };
 }
 
 export async function openRazorpayCheckout(params: {
